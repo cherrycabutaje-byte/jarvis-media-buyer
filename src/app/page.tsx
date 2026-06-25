@@ -168,6 +168,83 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Results / Social Proof */}
+      <section className="max-w-5xl mx-auto px-6 sm:px-12 py-16">
+        <div className="text-center mb-12">
+          <div className="inline-block border border-cyan-500 border-opacity-40 text-cyan-400 text-xs font-semibold px-4 py-1 rounded-full mb-4 tracking-widest uppercase">Real Results</div>
+          <h2 className="text-3xl font-bold text-white mb-4">What JARVIS Actually Produces</h2>
+          <p className="text-slate-400">Real outputs from real campaigns analyzed today.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-8">
+
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-cyan-900 to-slate-900 px-6 py-4 flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-cyan-400"></div>
+              <span className="text-cyan-400 text-xs font-bold tracking-widest">CAMPAIGN ANALYZER — FITNESS BRAND PH</span>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex gap-3">
+                <div className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded whitespace-nowrap mt-1">THE PROBLEM</div>
+                <p className="text-slate-300 text-sm leading-relaxed">The marketing is selling a tool. The customer is buying <span className="text-cyan-400 font-semibold">vindication</span> — the feeling of being right about their own potential.</p>
+              </div>
+              <div className="flex gap-3">
+                <div className="bg-cyan-600 text-white text-xs font-bold px-2 py-1 rounded whitespace-nowrap mt-1">THE FIX</div>
+                <p className="text-slate-300 text-sm leading-relaxed">Replace the concept comparison with a <span className="text-cyan-400 font-semibold">full, unedited sample output</span> so the product sells itself before the visitor commits to anything.</p>
+              </div>
+              <div className="border-t border-slate-800 pt-4">
+                <div className="text-slate-500 text-xs mb-2 font-semibold tracking-wider">JARVIS REWROTE THE HEADLINE AS:</div>
+                <p className="text-white font-bold text-lg">"Nahanap Ko Na Ulit Ang Sarili Ko — 20 Minuto Lang Sa Umaga, Sa Loob Ng 30 Araw"</p>
+                <p className="text-slate-500 text-xs mt-1">Translation: "I Found Myself Again — Just 20 Minutes A Morning, In 30 Days"</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-orange-900 to-slate-900 px-6 py-4 flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-orange-400"></div>
+              <span className="text-orange-400 text-xs font-bold tracking-widest">FACEBOOK AD ANALYZER — FITNESS AD</span>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex gap-3">
+                <div className="bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded whitespace-nowrap mt-1">HOOK SCORE</div>
+                <p className="text-slate-300 text-sm leading-relaxed"><span className="text-orange-400 font-bold">5/10</span> — Sobrang karaniwan. Nakita na ng audience mo ito nang sampung beses ngayong linggo lang.</p>
+              </div>
+              <div className="border-t border-slate-800 pt-4">
+                <div className="text-slate-500 text-xs mb-2 font-semibold tracking-wider">JARVIS REWROTE THE AD AS:</div>
+                <p className="text-white font-bold text-base mb-2">"Nagsimula siyang pumayat nang hindi tumigil sa kanin — 30 araw lang."</p>
+                <p className="text-slate-400 text-sm leading-relaxed">"Kilala mo ba ang pakiramdam na tumingin ka sa salamin at para kang nakakita ng ibang tao — hindi ka na siya, pero hindi ka rin fully ikaw ngayon?"</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-purple-900 to-slate-900 px-6 py-4 flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-purple-400"></div>
+              <span className="text-purple-400 text-xs font-bold tracking-widest">COMPETITOR AD SPY — FITNESS NICHE</span>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex gap-3">
+                <div className="bg-purple-600 text-white text-xs font-bold px-2 py-1 rounded whitespace-nowrap mt-1">THEIR WEAKNESS</div>
+                <p className="text-slate-300 text-sm leading-relaxed">Zero identity — the ad speaks to <span className="text-purple-400 font-semibold">"women"</span> not to a Filipino mother carrying the specific weight of her culture, her family, and her role.</p>
+              </div>
+              <div className="flex gap-3">
+                <div className="bg-green-600 text-white text-xs font-bold px-2 py-1 rounded whitespace-nowrap mt-1">YOUR WINNING MOVE</div>
+                <p className="text-slate-300 text-sm leading-relaxed">Own the identity they abandoned — make the Filipino mom feel so deeply seen that <span className="text-purple-400 font-semibold">every other weight loss ad feels like it was written for a stranger.</span></p>
+              </div>
+              <div className="border-t border-slate-800 pt-4">
+                <div className="text-slate-500 text-xs mb-2 font-semibold tracking-wider">JARVIS COUNTER-AD CLOSING LINE:</div>
+                <p className="text-white font-bold text-base italic">"She is not joining 50,000 faceless women. She is coming home."</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div className="text-center mt-10">
+          <p className="text-slate-400 text-sm mb-4">This is what JARVIS produces for every campaign. In 40 seconds. For free.</p>
+          <a href="/analyze" className="inline-block px-8 py-4 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-bold text-base transition-colors no-underline">Try It Free Now</a>
+        </div>
+      </section>
+
       {/* Pricing */}
       <section className="max-w-5xl mx-auto px-6 sm:px-12 py-16">
         <h2 className="text-3xl font-bold text-center text-white mb-4">Simple Pricing</h2>
