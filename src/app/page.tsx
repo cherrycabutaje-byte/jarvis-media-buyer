@@ -2,7 +2,7 @@
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-gray-900 text-white">
 
       {/* Nav */}
       <nav className="flex items-center justify-between px-6 sm:px-12 py-5 border-b border-slate-800">
@@ -17,7 +17,7 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="max-w-5xl mx-auto px-6 sm:px-12 pt-20 sm:pt-32 pb-16 text-center">
-        <div className="inline-block bg-cyan-500 bg-opacity-10 border border-cyan-500 border-opacity-30 text-cyan-400 text-xs font-semibold px-4 py-1.5 rounded-full mb-6">
+        <div className="inline-block bg-transparent border border-cyan-400 text-cyan-400 text-xs font-semibold px-4 py-1.5 rounded-full mb-6 tracking-widest uppercase">
           Marketing Intelligence System
         </div>
         <h1 className="text-4xl sm:text-6xl font-extrabold leading-tight text-white mb-6 drop-shadow-lg">
