@@ -138,31 +138,37 @@ export default function LandingPage() {
 
       {/* Tools Section */}
       <section className="max-w-5xl mx-auto px-6 sm:px-12 py-16">
-        <h2 className="text-3xl font-bold text-center text-white mb-4">Choose Your Analysis</h2>
-        <p className="text-center text-slate-400 mb-12">Two powerful tools. One intelligence system.</p>
+        <h2 className="text-3xl font-bold text-center text-white mb-4">4 Intelligence Tools. One System.</h2>
+        <p className="text-center text-slate-400 mb-12">Everything a media buyer needs to diagnose, optimize, and win.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <a href="/analyze" className="bg-slate-900 border border-slate-800 hover:border-cyan-500 rounded-xl p-8 text-left transition-all group no-underline">
-            <div className="text-cyan-400 font-bold text-sm mb-2 tracking-widest">CAMPAIGN ANALYZER</div>
-            <h3 className="text-white font-bold text-xl mb-3">Full Campaign Intelligence</h3>
-            <p className="text-slate-400 text-sm mb-6">Paste your landing page, ad copy, offer, or funnel. Get a full intelligence report with psychology, positioning, and exact copy to use.</p>
-            <div className="text-cyan-400 text-sm font-semibold group-hover:underline">Analyze My Campaign</div>
+            <div className="text-cyan-400 font-bold text-xs mb-2 tracking-widest">CAMPAIGN ANALYZER</div>
+            <h3 className="text-white font-bold text-lg mb-2">Full Campaign Intelligence</h3>
+            <p className="text-slate-400 text-sm mb-4">Paste your landing page, ad copy, or funnel. Get psychology, positioning, and exact copy to use.</p>
+            <div className="text-cyan-400 text-sm font-semibold">Analyze My Campaign</div>
           </a>
           <a href="/facebook-ad" className="bg-slate-900 border border-slate-800 hover:border-orange-500 rounded-xl p-8 text-left transition-all group no-underline">
-            <div className="text-orange-400 font-bold text-sm mb-2 tracking-widest">FACEBOOK AD ANALYZER</div>
-            <h3 className="text-white font-bold text-xl mb-3">Facebook Ad Creative Analysis</h3>
-            <p className="text-slate-400 text-sm mb-6">Paste your Facebook ad headline and copy. Get hook score, emotion analysis, audience match, and a rewritten winning ad.</p>
-            <div className="text-orange-400 text-sm font-semibold group-hover:underline">Analyze My Ad</div>
+            <div className="text-orange-400 font-bold text-xs mb-2 tracking-widest">FACEBOOK AD ANALYZER</div>
+            <h3 className="text-white font-bold text-lg mb-2">Facebook Ad Creative Analysis</h3>
+            <p className="text-slate-400 text-sm mb-4">Get hook score, emotion analysis, audience match, and a rewritten winning ad.</p>
+            <div className="text-orange-400 text-sm font-semibold">Analyze My Ad</div>
           </a>
-          <a href="/competitor-spy" className="bg-slate-900 border border-slate-800 hover:border-purple-500 rounded-xl p-8 text-left transition-all group no-underline sm:col-span-2">
-            <div className="text-purple-400 font-bold text-sm mb-2 tracking-widest">COMPETITOR AD SPY</div>
-            <h3 className="text-white font-bold text-xl mb-3">Decode Your Competitor Strategy</h3>
-            <p className="text-slate-400 text-sm mb-6">Paste any competitor ad. JARVIS decodes their angle, finds their weakness, and writes a counter-ad that beats them. Know exactly why their ad works — and how to win.</p>
-            <div className="text-purple-400 text-sm font-semibold group-hover:underline">Spy On Competitor</div>
+          <a href="/competitor-spy" className="bg-slate-900 border border-slate-800 hover:border-purple-500 rounded-xl p-8 text-left transition-all group no-underline">
+            <div className="text-purple-400 font-bold text-xs mb-2 tracking-widest">COMPETITOR AD SPY</div>
+            <h3 className="text-white font-bold text-lg mb-2">Decode Competitor Strategy</h3>
+            <p className="text-slate-400 text-sm mb-4">Paste any competitor ad. JARVIS decodes their angle, finds their weakness, and writes your counter-ad.</p>
+            <div className="text-purple-400 text-sm font-semibold">Spy On Competitor</div>
+          </a>
+          <a href="/hook-generator" className="bg-slate-900 border border-slate-800 hover:border-yellow-500 rounded-xl p-8 text-left transition-all group no-underline">
+            <div className="text-yellow-400 font-bold text-xs mb-2 tracking-widest">HOOK GENERATOR</div>
+            <h3 className="text-white font-bold text-lg mb-2">Generate 10 Scroll-Stopping Hooks</h3>
+            <p className="text-slate-400 text-sm mb-4">Enter your product and audience. Get 10 hooks with psychological triggers and performance predictions.</p>
+            <div className="text-yellow-400 text-sm font-semibold">Generate Hooks</div>
           </a>
         </div>
       </section>
 
-      {/* CTA */}
+      {/* CTA */
       <section className="max-w-3xl mx-auto px-6 sm:px-12 py-20 text-center">
         <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
           Ready to find out why your campaign is not converting?
