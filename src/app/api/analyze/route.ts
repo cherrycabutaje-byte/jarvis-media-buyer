@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+﻿import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { psychologistPrompt } from "@/lib/brains/psychologist";
 import { mediaBuyerPrompt } from "@/lib/brains/mediaBuyer";
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     const mi = "MODE: " + mode + ". " + (mode === "quick" ? "Maximum 500 words." : "Maximum 900 words.");
     const expertMaxTokens = mode === "quick" ? 512 : 1024;
     const jarvisMaxTokens = mode === "quick" ? 800 : 2048;
-    const mc = (p) => li + "\n\n" + p + "\n\n" + mi + "\n\nMarketing Information:\n" + input;
+    const mc = (p: string) => li + "\n\n" + p + "\n\n" + mi + "\n\nMarketing Information:\n" + input;
     const [ps, mb, gs, os] = await Promise.all([
       client.messages.create({ model: "claude-sonnet-4-6", max_tokens: expertMaxTokens, messages: [{ role: "user", content: mc(psychologistPrompt) }] }),
       client.messages.create({ model: "claude-sonnet-4-6", max_tokens: expertMaxTokens, messages: [{ role: "user", content: mc(mediaBuyerPrompt) }] }),
