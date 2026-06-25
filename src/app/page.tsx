@@ -168,7 +168,59 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CTA */
+      {/* Pricing */}
+      <section className="max-w-5xl mx-auto px-6 sm:px-12 py-16">
+        <h2 className="text-3xl font-bold text-center text-white mb-4">Simple Pricing</h2>
+        <p className="text-center text-slate-400 mb-12">Start free. Upgrade when you are ready.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-8">
+            <div className="text-slate-400 font-bold text-xs tracking-widest mb-4">FREE</div>
+            <div className="text-4xl font-extrabold text-white mb-1">      {/* CTA */}</div>
+            <div className="text-slate-500 text-sm mb-6">Forever free</div>
+            <div className="space-y-3 mb-8">
+              <div className="flex items-center gap-2 text-slate-300 text-sm"><span className="text-cyan-400">✓</span> 3 analyses per day</div>
+              <div className="flex items-center gap-2 text-slate-300 text-sm"><span className="text-cyan-400">✓</span> All 4 tools</div>
+              <div className="flex items-center gap-2 text-slate-300 text-sm"><span className="text-cyan-400">✓</span> Auto-detect language</div>
+              <div className="flex items-center gap-2 text-slate-400 text-sm"><span className="text-slate-600">✗</span> PDF export</div>
+              <div className="flex items-center gap-2 text-slate-400 text-sm"><span className="text-slate-600">✗</span> Priority speed</div>
+            </div>
+            <a href="/analyze" className="block text-center py-3 px-6 border border-slate-700 text-slate-300 rounded-lg font-medium text-sm hover:border-slate-500 transition-colors no-underline">Start Free</a>
+          </div>
+
+          <div className="bg-slate-900 border-2 border-cyan-500 rounded-xl p-8 relative">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-cyan-500 text-white text-xs font-bold px-4 py-1 rounded-full">MOST POPULAR</div>
+            <div className="text-cyan-400 font-bold text-xs tracking-widest mb-4">STARTER</div>
+            <div className="text-4xl font-extrabold text-white mb-1">$29</div>
+            <div className="text-slate-500 text-sm mb-6">per month</div>
+            <div className="space-y-3 mb-8">
+              <div className="flex items-center gap-2 text-slate-300 text-sm"><span className="text-cyan-400">✓</span> Unlimited analyses</div>
+              <div className="flex items-center gap-2 text-slate-300 text-sm"><span className="text-cyan-400">✓</span> All 4 tools</div>
+              <div className="flex items-center gap-2 text-slate-300 text-sm"><span className="text-cyan-400">✓</span> Auto-detect language</div>
+              <div className="flex items-center gap-2 text-slate-300 text-sm"><span className="text-cyan-400">✓</span> PDF export</div>
+              <div className="flex items-center gap-2 text-slate-400 text-sm"><span className="text-slate-600">✗</span> Priority speed</div>
+            </div>
+            <a href="/checkout?plan=starter" className="block text-center py-3 px-6 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg font-medium text-sm transition-colors no-underline">Get Started</a>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-8">
+            <div className="text-purple-400 font-bold text-xs tracking-widest mb-4">PRO</div>
+            <div className="text-4xl font-extrabold text-white mb-1">$79</div>
+            <div className="text-slate-500 text-sm mb-6">per month</div>
+            <div className="space-y-3 mb-8">
+              <div className="flex items-center gap-2 text-slate-300 text-sm"><span className="text-cyan-400">✓</span> Unlimited analyses</div>
+              <div className="flex items-center gap-2 text-slate-300 text-sm"><span className="text-cyan-400">✓</span> All 4 tools</div>
+              <div className="flex items-center gap-2 text-slate-300 text-sm"><span className="text-cyan-400">✓</span> Auto-detect language</div>
+              <div className="flex items-center gap-2 text-slate-300 text-sm"><span className="text-cyan-400">✓</span> PDF export</div>
+              <div className="flex items-center gap-2 text-slate-300 text-sm"><span className="text-cyan-400">✓</span> Priority speed</div>
+            </div>
+            <a href="/checkout?plan=pro" className="block text-center py-3 px-6 border border-purple-500 text-purple-400 hover:bg-purple-500 hover:text-white rounded-lg font-medium text-sm transition-colors no-underline">Get Pro</a>
+          </div>
+
+        </div>
+      </section>
+
+      {/* CTA */}
       <section className="max-w-3xl mx-auto px-6 sm:px-12 py-20 text-center">
         <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
           Ready to find out why your campaign is not converting?
