@@ -91,8 +91,12 @@ export default function AnalyzePage() {
   const [fetching, setFetching] = useState(false);
   const [fetchMessage, setFetchMessage] = useState("");
   const [error, setError] = useState("");
-  const [language, setLanguage] = useState("English");
+  const [language, setLanguage] = useState("Auto-Detect");
   const [loadingStep, setLoadingStep] = useState(0);
+  const [email, setEmail] = useState("");
+  const [emailSubmitted, setEmailSubmitted] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [showEmailCapture, setShowEmailCapture] = useState(false);
 
   const t = UI_TEXT[language] || UI_TEXT["English"];
 
@@ -158,6 +162,28 @@ export default function AnalyzePage() {
       setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function submitEmail() {
+    if (!email.trim() || !email.includes("@")) return;
+    try {
+      setEmailLoading(true);
+      const response = await fetch("/api/capture-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, language }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setEmailSubmitted(true);
+        downloadPDF();
+      }
+    } catch (err) {
+      console.error(err);
+      downloadPDF();
+    } finally {
+      setEmailLoading(false);
     }
   }
 
@@ -302,17 +328,10 @@ export default function AnalyzePage() {
         )}
 
         <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-slate-600 text-sm font-medium whitespace-nowrap">{t.languageLabel}</label>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 bg-white"
-            >
-              {LANGUAGES.map((lang) => (
-                <option key={lang.code} value={lang.code}>{lang.label}</option>
-              ))}
-            </select>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-slate-500 text-sm">Language:</span>
+            <span className="bg-cyan-50 border border-cyan-200 text-cyan-700 text-xs font-semibold px-3 py-1 rounded-full">Auto-Detect</span>
+            <span className="text-slate-400 text-xs">JARVIS detects your input language automatically</span>
           </div>
           <button
             onClick={analyze}
@@ -374,10 +393,37 @@ export default function AnalyzePage() {
               <div className="prose prose-slate max-w-none prose-sm sm:prose-base prose-h1:text-xl prose-h1:font-bold prose-h1:text-cyan-600 prose-h1:border-b prose-h1:border-cyan-200 prose-h1:pb-2 prose-h1:mt-6 prose-h2:text-lg prose-h2:font-bold prose-h2:text-slate-800 prose-h2:mt-4 prose-strong:text-slate-900 prose-p:text-slate-700 prose-p:leading-relaxed prose-li:text-slate-700 prose-hr:border-slate-200">
                 <ReactMarkdown>{report}</ReactMarkdown>
               </div>
-              <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t flex justify-end">
-                <button onClick={downloadPDF} className="w-full sm:w-auto px-5 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg font-medium transition-colors text-sm sm:text-base">
-                  {t.downloadBtn}
-                </button>
+              <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t">
+                {!emailSubmitted ? (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+                    <h3 className="text-slate-800 font-bold text-base mb-1">Download Your Full PDF Report</h3>
+                    <p className="text-slate-500 text-sm mb-4">Enter your email to download the report and get notified of new JARVIS features.</p>
+                    <div className="flex gap-2 flex-col sm:flex-row">
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="your@email.com"
+                        className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      />
+                      <button
+                        onClick={submitEmail}
+                        disabled={emailLoading || !email.trim()}
+                        className="px-5 py-2 bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-colors whitespace-nowrap"
+                      >
+                        {emailLoading ? "Saving..." : "Download PDF"}
+                      </button>
+                    </div>
+                    <p className="text-slate-400 text-xs mt-2">No spam. Unsubscribe anytime.</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <p className="text-green-600 text-sm font-medium">Email saved! Your PDF is downloading.</p>
+                    <button onClick={downloadPDF} className="px-5 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg font-medium text-sm transition-colors">
+                      Download Again
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
