@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import jsPDF from "jspdf";
 import Link from "next/link";
 
-function splitVerdictAndReport(text) {
+function splitVerdictAndReport(text: string) {
   const verdictMatch = text.match(/(## JARVIS VERDICT[\s\S]*?---\n)([\s\S]*)/);
   if (verdictMatch) {
     return { verdict: verdictMatch[1].replace(/---\n$/, "").trim(), report: verdictMatch[2].trim() };

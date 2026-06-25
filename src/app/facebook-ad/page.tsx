@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import Link from "next/link";
 
-function splitVerdictAndReport(text) {
+function splitVerdictAndReport(text: string) {
   const verdictMatch = text.match(/(## JARVIS VERDICT[\s\S]*?---\n)([\s\S]*)/);
   if (verdictMatch) {
     return { verdict: verdictMatch[1].replace(/---\n$/, "").trim(), report: verdictMatch[2].trim() };
@@ -60,7 +60,7 @@ export default function FacebookAdPage() {
             Analyze Your Facebook Ad
           </h1>
           <p style={{color: "#94a3b8", fontSize: "16px", lineHeight: "1.6"}}>
-            Find out why your Facebook ad is not converting � and get a rewritten version that will.
+            Find out why your Facebook ad is not converting ï¿½ and get a rewritten version that will.
           </p>
         </div>
 
