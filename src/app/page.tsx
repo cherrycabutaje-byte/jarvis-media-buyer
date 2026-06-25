@@ -20,7 +20,7 @@ export default function LandingPage() {
         <div className="inline-block bg-cyan-500 bg-opacity-10 border border-cyan-500 border-opacity-30 text-cyan-400 text-xs font-semibold px-4 py-1.5 rounded-full mb-6">
           Marketing Intelligence System
         </div>
-        <h1 className="text-4xl sm:text-6xl font-extrabold leading-tight text-white mb-6">
+        <h1 className="text-4xl sm:text-6xl font-extrabold leading-tight text-white mb-6 drop-shadow-lg">
           Find The Real Reason Your Campaign Is Not Converting
         </h1>
         <p className="text-slate-400 text-lg sm:text-xl max-w-2xl mx-auto mb-10">
