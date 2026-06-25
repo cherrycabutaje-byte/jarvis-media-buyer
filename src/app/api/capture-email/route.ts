@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
@@ -10,26 +10,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
     }
 
-    const response = await fetch(
-      https://api.airtable.com/v0//,
-      {
-        method: "POST",
-        headers: {
-          Authorization: Bearer ,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          records: [
-            {
-              fields: {
-                Emails: email,
-                Language: language,
-              },
-            },
-          ],
-        }),
-      }
-    );
+    const baseId = process.env.AIRTABLE_BASE_ID;
+    const tableName = process.env.AIRTABLE_TABLE_NAME;
+    const apiKey = process.env.AIRTABLE_API_KEY;
+    const url = "https://api.airtable.com/v0/" + baseId + "/" + tableName;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        records: [{ fields: { Emails: email, Language: language } }],
+      }),
+    });
 
     if (!response.ok) {
       const error = await response.json();
