@@ -136,6 +136,26 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Tools Section */}
+      <section className="max-w-5xl mx-auto px-6 sm:px-12 py-16">
+        <h2 className="text-3xl font-bold text-center text-white mb-4">Choose Your Analysis</h2>
+        <p className="text-center text-slate-400 mb-12">Two powerful tools. One intelligence system.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <a href="/analyze" className="bg-slate-900 border border-slate-800 hover:border-cyan-500 rounded-xl p-8 text-left transition-all group no-underline">
+            <div className="text-cyan-400 font-bold text-sm mb-2 tracking-widest">CAMPAIGN ANALYZER</div>
+            <h3 className="text-white font-bold text-xl mb-3">Full Campaign Intelligence</h3>
+            <p className="text-slate-400 text-sm mb-6">Paste your landing page, ad copy, offer, or funnel. Get a full intelligence report with psychology, positioning, and exact copy to use.</p>
+            <div className="text-cyan-400 text-sm font-semibold group-hover:underline">Analyze My Campaign</div>
+          </a>
+          <a href="/facebook-ad" className="bg-slate-900 border border-slate-800 hover:border-orange-500 rounded-xl p-8 text-left transition-all group no-underline">
+            <div className="text-orange-400 font-bold text-sm mb-2 tracking-widest">FACEBOOK AD ANALYZER</div>
+            <h3 className="text-white font-bold text-xl mb-3">Facebook Ad Creative Analysis</h3>
+            <p className="text-slate-400 text-sm mb-6">Paste your Facebook ad headline and copy. Get hook score, emotion analysis, audience match, and a rewritten winning ad.</p>
+            <div className="text-orange-400 text-sm font-semibold group-hover:underline">Analyze My Ad</div>
+          </a>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="max-w-3xl mx-auto px-6 sm:px-12 py-20 text-center">
         <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">

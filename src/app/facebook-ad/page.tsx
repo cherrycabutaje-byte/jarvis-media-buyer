@@ -1,0 +1,139 @@
+"use client";
+import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import Link from "next/link";
+
+function splitVerdictAndReport(text) {
+  const verdictMatch = text.match(/(## JARVIS VERDICT[\s\S]*?---\n)([\s\S]*)/);
+  if (verdictMatch) {
+    return { verdict: verdictMatch[1].replace(/---\n$/, "").trim(), report: verdictMatch[2].trim() };
+  }
+  return { verdict: "", report: text };
+}
+
+export default function FacebookAdPage() {
+  const [headline, setHeadline] = useState("");
+  const [bodyCopy, setBodyCopy] = useState("");
+  const [audience, setAudience] = useState("");
+  const [objective, setObjective] = useState("Conversions");
+  const [analysis, setAnalysis] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const objectives = ["Conversions", "Traffic", "Lead Generation", "Brand Awareness", "Engagement", "App Installs"];
+
+  async function analyze() {
+    if (!headline.trim() && !bodyCopy.trim()) return;
+    try {
+      setLoading(true); setError(""); setAnalysis("");
+      const response = await fetch("/api/analyze-ad", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ headline, bodyCopy, audience, objective, language: "Auto-Detect" }),
+      });
+      const data = await response.json();
+      if (data.error) { setError(data.error); }
+      else { setAnalysis(data.result); }
+    } catch (err) { setError("Something went wrong. Please try again."); }
+    finally { setLoading(false); }
+  }
+
+  const { verdict, report } = splitVerdictAndReport(analysis);
+
+  return (
+    <main style={{background: "#080b12", minHeight: "100vh"}}>
+      <nav style={{borderBottom: "1px solid #1e293b", padding: "16px 32px", display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+        <Link href="/" style={{fontSize: "22px", fontWeight: "800", color: "#22d3ee", textDecoration: "none"}}>JARVIS</Link>
+        <div style={{display: "flex", gap: "20px", alignItems: "center"}}>
+          <Link href="/analyze" style={{fontSize: "13px", color: "#64748b", textDecoration: "none"}}>Campaign Analyzer</Link>
+          <Link href="/" style={{fontSize: "13px", color: "#64748b", textDecoration: "none"}}>Home</Link>
+        </div>
+      </nav>
+
+      <div style={{maxWidth: "800px", margin: "0 auto", padding: "40px 20px"}}>
+
+        <div style={{marginBottom: "32px"}}>
+          <div style={{display: "inline-block", border: "1px solid rgba(251,146,60,0.4)", color: "#fb923c", fontSize: "11px", fontWeight: "700", padding: "4px 14px", borderRadius: "20px", marginBottom: "16px", letterSpacing: "2px"}}>
+            FACEBOOK AD ANALYZER
+          </div>
+          <h1 style={{fontSize: "32px", fontWeight: "800", color: "#ffffff", marginBottom: "12px", lineHeight: "1.2"}}>
+            Analyze Your Facebook Ad
+          </h1>
+          <p style={{color: "#94a3b8", fontSize: "16px", lineHeight: "1.6"}}>
+            Find out why your Facebook ad is not converting � and get a rewritten version that will.
+          </p>
+        </div>
+
+        <div style={{background: "#0f172a", border: "1px solid #1e293b", borderRadius: "16px", padding: "24px", marginBottom: "24px"}}>
+
+          <div style={{marginBottom: "20px"}}>
+            <label style={{display: "block", color: "#94a3b8", fontSize: "13px", fontWeight: "600", marginBottom: "8px", letterSpacing: "0.5px"}}>AD HEADLINE</label>
+            <input value={headline} onChange={(e) => setHeadline(e.target.value)} style={{width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: "10px", padding: "12px 14px", color: "#e2e8f0", fontSize: "14px", outline: "none", fontFamily: "inherit", boxSizing: "border-box"}} placeholder="Stop Losing Sales To Abandoned Carts" />
+          </div>
+
+          <div style={{marginBottom: "20px"}}>
+            <label style={{display: "block", color: "#94a3b8", fontSize: "13px", fontWeight: "600", marginBottom: "8px", letterSpacing: "0.5px"}}>AD BODY COPY</label>
+            <textarea value={bodyCopy} onChange={(e) => setBodyCopy(e.target.value)} style={{width: "100%", height: "120px", background: "#1e293b", border: "1px solid #334155", borderRadius: "10px", padding: "12px 14px", color: "#e2e8f0", fontSize: "14px", outline: "none", fontFamily: "inherit", resize: "none", boxSizing: "border-box"}} placeholder="Tired of losing customers before they buy? Our tool helps you recover..." />
+          </div>
+
+          <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "24px"}}>
+            <div>
+              <label style={{display: "block", color: "#94a3b8", fontSize: "13px", fontWeight: "600", marginBottom: "8px", letterSpacing: "0.5px"}}>TARGET AUDIENCE</label>
+              <input value={audience} onChange={(e) => setAudience(e.target.value)} style={{width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: "10px", padding: "12px 14px", color: "#e2e8f0", fontSize: "14px", outline: "none", fontFamily: "inherit", boxSizing: "border-box"}} placeholder="E-commerce store owners 25-45" />
+            </div>
+            <div>
+              <label style={{display: "block", color: "#94a3b8", fontSize: "13px", fontWeight: "600", marginBottom: "8px", letterSpacing: "0.5px"}}>CAMPAIGN OBJECTIVE</label>
+              <select value={objective} onChange={(e) => setObjective(e.target.value)} style={{width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: "10px", padding: "12px 14px", color: "#e2e8f0", fontSize: "14px", outline: "none", fontFamily: "inherit", boxSizing: "border-box"}}>
+                {objectives.map(obj => <option key={obj} value={obj}>{obj}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <button onClick={analyze} disabled={loading || (!headline.trim() && !bodyCopy.trim())} style={{width: "100%", padding: "14px", background: loading || (!headline.trim() && !bodyCopy.trim()) ? "#1e293b" : "#ea580c", color: loading || (!headline.trim() && !bodyCopy.trim()) ? "#475569" : "white", border: "none", borderRadius: "10px", fontWeight: "700", fontSize: "15px", cursor: loading || (!headline.trim() && !bodyCopy.trim()) ? "not-allowed" : "pointer", transition: "all 0.2s"}}>
+            {loading ? "Analyzing Your Ad..." : "Analyze My Facebook Ad"}
+          </button>
+        </div>
+
+        {loading && (
+          <div style={{background: "#0f172a", border: "1px solid #1e293b", borderRadius: "16px", padding: "24px", marginBottom: "24px"}}>
+            <div style={{display: "flex", alignItems: "center", gap: "10px"}}>
+              <div style={{width: "8px", height: "8px", borderRadius: "50%", background: "#fb923c"}}></div>
+              <span style={{color: "#fb923c", fontWeight: "600", fontSize: "14px"}}>JARVIS is analyzing your Facebook ad...</span>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div style={{marginBottom: "24px", padding: "14px 16px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "10px", color: "#f87171", fontSize: "14px"}}>{error}</div>
+        )}
+
+        {analysis && (
+          <div style={{background: "#0f172a", border: "1px solid #1e293b", borderRadius: "16px", overflow: "hidden"}}>
+            <div style={{background: "linear-gradient(135deg, #9a3412, #ea580c)", padding: "24px 28px"}}>
+              <div style={{display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px"}}>
+                <div style={{width: "6px", height: "6px", borderRadius: "50%", background: "rgba(255,255,255,0.7)"}}></div>
+                <span style={{color: "rgba(255,255,255,0.7)", fontSize: "11px", fontWeight: "700", letterSpacing: "2px"}}>FACEBOOK AD ANALYSIS</span>
+              </div>
+              <h2 style={{fontSize: "24px", fontWeight: "800", color: "white", margin: 0}}>JARVIS Ad Report</h2>
+              <p style={{color: "rgba(255,255,255,0.7)", fontSize: "14px", marginTop: "6px"}}>Find The Real Reason Your Ad Is Not Converting</p>
+            </div>
+
+            {verdict && (
+              <div style={{background: "#060911", padding: "24px 28px", borderBottom: "1px solid #1e293b"}}>
+                <div className="prose prose-invert max-w-none prose-h2:text-orange-400 prose-h2:text-base prose-h2:font-bold prose-h2:mb-3 prose-h2:mt-0 prose-blockquote:border-l-4 prose-blockquote:border-orange-500 prose-blockquote:pl-4 prose-blockquote:not-italic prose-blockquote:text-slate-300 prose-strong:text-white prose-p:text-slate-300">
+                  <ReactMarkdown>{verdict}</ReactMarkdown>
+                </div>
+              </div>
+            )}
+
+            <div style={{padding: "28px"}}>
+              <div className="prose prose-invert max-w-none prose-h1:text-xl prose-h1:font-bold prose-h1:text-orange-400 prose-h1:border-b prose-h1:border-slate-700 prose-h1:pb-2 prose-h1:mt-8 prose-h2:text-lg prose-h2:font-bold prose-h2:text-slate-200 prose-h2:mt-6 prose-strong:text-white prose-p:text-slate-300 prose-p:leading-relaxed prose-li:text-slate-300 prose-hr:border-slate-700">
+                <ReactMarkdown>{report}</ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
