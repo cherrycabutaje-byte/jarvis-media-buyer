@@ -1,8 +1,8 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function CheckoutPage() {
+function CheckoutRedirect() {
   const searchParams = useSearchParams();
   const plan = searchParams.get("plan") || "starter";
 
@@ -20,11 +20,19 @@ export default function CheckoutPage() {
   }, [plan]);
 
   return (
+    <div style={{textAlign: "center"}}>
+      <div style={{color: "#22d3ee", fontSize: "18px", fontWeight: "600"}}>Redirecting to checkout...</div>
+      <div style={{color: "#475569", fontSize: "14px", marginTop: "8px"}}>Please wait.</div>
+    </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
     <main style={{background: "#080b12", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center"}}>
-      <div style={{textAlign: "center"}}>
-        <div style={{color: "#22d3ee", fontSize: "18px", fontWeight: "600"}}>Redirecting to checkout...</div>
-        <div style={{color: "#475569", fontSize: "14px", marginTop: "8px"}}>Please wait.</div>
-      </div>
+      <Suspense fallback={<div style={{color: "#22d3ee", fontSize: "18px", fontWeight: "600"}}>Loading...</div>}>
+        <CheckoutRedirect />
+      </Suspense>
     </main>
   );
 }
