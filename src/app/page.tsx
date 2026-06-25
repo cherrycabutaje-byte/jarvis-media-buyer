@@ -236,9 +236,42 @@ export default function LandingPage() {
         </Link>
       </section>
 
+      {/* FAQ */}
+      <section className="max-w-3xl mx-auto px-6 sm:px-12 py-16">
+        <h2 className="text-3xl font-bold text-center text-white mb-12">Frequently Asked Questions</h2>
+        <div className="space-y-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+            <h3 className="text-white font-bold mb-2">How does JARVIS work?</h3>
+            <p className="text-slate-400 text-sm">You paste your campaign data, ad copy, or landing page. JARVIS runs 4 specialist analyses in parallel and synthesizes the findings into one clear intelligence report with exact copy to use.</p>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+            <h3 className="text-white font-bold mb-2">What languages does JARVIS support?</h3>
+            <p className="text-slate-400 text-sm">JARVIS auto-detects your input language and responds in the same language. It works in any language including English, Tagalog, Spanish, French, Arabic, Japanese, and more.</p>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+            <h3 className="text-white font-bold mb-2">What is included in the free plan?</h3>
+            <p className="text-slate-400 text-sm">The free plan gives you access to all 4 tools — Campaign Analyzer, Facebook Ad Analyzer, Competitor Ad Spy, and Hook Generator. No credit card required.</p>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+            <h3 className="text-white font-bold mb-2">Can I cancel my subscription anytime?</h3>
+            <p className="text-slate-400 text-sm">Yes. You can cancel anytime from your Stripe billing portal. No questions asked. Your access continues until the end of your billing period.</p>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+            <h3 className="text-white font-bold mb-2">Is my payment information secure?</h3>
+            <p className="text-slate-400 text-sm">Yes. All payments are processed by Stripe — the same payment system used by Amazon, Shopify, and Airbnb. JARVIS never sees or stores your card details.</p>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+            <h3 className="text-white font-bold mb-2">How is JARVIS different from ChatGPT?</h3>
+            <p className="text-slate-400 text-sm">ChatGPT gives generic advice. JARVIS runs 4 specialized expert analyses — Consumer Psychologist, Media Buyer, Growth Strategist, and Offer Strategist — and synthesizes them into specific actionable intelligence for your exact campaign.</p>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="border-t border-slate-800 px-6 sm:px-12 py-8 text-center text-slate-500 text-sm">
-        JARVIS Marketing Intelligence - Powered by Claude AI
+        JARVIS Marketing Intelligence
+        <br />
+        <span style={{marginTop: "8px", display: "inline-block"}}>Need help? <a href="mailto:jarvislogic@yahoo.com" className="text-cyan-400 hover:underline">jarvislogic@yahoo.com</a> or <a href="https://wa.me/306973229580" target="_blank" className="text-cyan-400 hover:underline">WhatsApp</a></span>
       </footer>
 
     </main>
