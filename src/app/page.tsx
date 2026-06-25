@@ -153,6 +153,12 @@ export default function LandingPage() {
             <p className="text-slate-400 text-sm mb-6">Paste your Facebook ad headline and copy. Get hook score, emotion analysis, audience match, and a rewritten winning ad.</p>
             <div className="text-orange-400 text-sm font-semibold group-hover:underline">Analyze My Ad</div>
           </a>
+          <a href="/competitor-spy" className="bg-slate-900 border border-slate-800 hover:border-purple-500 rounded-xl p-8 text-left transition-all group no-underline sm:col-span-2">
+            <div className="text-purple-400 font-bold text-sm mb-2 tracking-widest">COMPETITOR AD SPY</div>
+            <h3 className="text-white font-bold text-xl mb-3">Decode Your Competitor Strategy</h3>
+            <p className="text-slate-400 text-sm mb-6">Paste any competitor ad. JARVIS decodes their angle, finds their weakness, and writes a counter-ad that beats them. Know exactly why their ad works — and how to win.</p>
+            <div className="text-purple-400 text-sm font-semibold group-hover:underline">Spy On Competitor</div>
+          </a>
         </div>
       </section>
 
