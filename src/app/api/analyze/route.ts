@@ -1,4 +1,4 @@
-﻿import Anthropic from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { psychologistPrompt } from "@/lib/brains/psychologist";
 import { mediaBuyerPrompt } from "@/lib/brains/mediaBuyer";
@@ -17,10 +17,13 @@ export async function POST(req: Request) {
     if (!input.trim()) {
       return NextResponse.json({ error: "No input provided" }, { status: 400 });
     }
-    const lang = language;
-    const li = lang === "English"
+    const isAutoDetect = language === "Auto-Detect" || language === "auto" || language === "";
+    const isEnglish = language === "English";
+    const li = isAutoDetect
+      ? "Detect the language of the marketing information provided and respond entirely in that same language. If the input is in English respond in English. If the input is in Tagalog respond in Tagalog. If the input is in Spanish respond in Spanish. Match the language of the input exactly."
+      : isEnglish
       ? "Respond in English."
-      : "YOUR RESPONSE MUST BE 100% IN " + lang.toUpperCase() + ". NOT ONE WORD IN ENGLISH. EVERY HEADING, LABEL, SENTENCE MUST BE IN " + lang.toUpperCase() + ". THIS IS MANDATORY.";
+      : "YOUR RESPONSE MUST BE 100% IN " + language.toUpperCase() + ". NOT ONE WORD IN ENGLISH. EVERY HEADING, LABEL, SENTENCE MUST BE IN " + language.toUpperCase() + ".";
     const mi = "MODE: " + mode + ". " + (mode === "quick" ? "Maximum 500 words." : "Maximum 900 words.");
     const expertMaxTokens = mode === "quick" ? 512 : 1024;
     const jarvisMaxTokens = mode === "quick" ? 800 : 2048;
