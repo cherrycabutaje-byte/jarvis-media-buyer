@@ -1,6 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
-import { competitorAdSpyPrompt } from "@/lib/brains/competitorAdSpy";
 
 const client = new Anthropic();
 
@@ -11,32 +10,18 @@ export async function POST(req: Request) {
     const competitorBody = body.competitorBody || "";
     const yourProduct = body.yourProduct || "";
     const audience = body.audience || "";
-
     if (!competitorHeadline.trim() && !competitorBody.trim()) {
       return NextResponse.json({ error: "Please provide the competitor ad." }, { status: 400 });
     }
-
-    const adContent = "COMPETITOR AD:\n\nHeadline: " + competitorHeadline + "\nBody Copy: " + competitorBody + "\n\nYOUR PRODUCT/NICHE: " + yourProduct + "\nTARGET AUDIENCE: " + audience;
-
-    const spyAnalysis = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1024,
-      messages: [{ role: "user", content: competitorAdSpyPrompt + "\n\n" + adContent }]
-    });
-
-    const spyOutput = (spyAnalysis.content[0] as { text: string }).text;
-
-    const synthPrompt = "You are JARVIS, a marketing intelligence system.\n\nA competitive intelligence analyst has decoded a competitor ad.\n\nYour job: Synthesize the findings into a sharp intelligence report with a winning counter-strategy.\nMaximum 800 words. No repetition.\n\nANALYST FINDINGS:\n" + spyOutput + "\n\n" + adContent + "\n\nReturn EXACTLY this structure:\n\n## JARVIS VERDICT\n> **Their Angle:** One sentence � what strategy the competitor is using.\n> **Their Weakness:** One sentence � the gap in their approach.\n> **Your Winning Move:** One sentence � how you beat them.\n\n---\n\n# COMPETITOR INTELLIGENCE\n**Core Angle:** What fundamental strategy are they using and why?\n**Hook Strategy:** How are they stopping the scroll?\n**Emotional Trigger:** What deep emotion are they activating?\n**Why It Works:** The psychological reason this ad converts.\n**Their Weakness:** The gap or vulnerability in their approach that you can exploit.\n\n# YOUR COUNTER-STRATEGY\n**The Angle They Have Not Used:** What positioning is wide open that they are NOT claiming?\n**Why This Beats Them:** Why your counter-angle is stronger psychologically.\n**Your Unfair Advantage:** What can you say that they cannot?\n\n# YOUR WINNING AD\nWrite a complete counter-ad that beats the competitor:\n\n**Headline:**\n**Body Copy:**\n**CTA:**\n**Why This Wins:**";
-
+    const adContent = "COMPETITOR AD:\n\nHeadline: " + competitorHeadline + "\nBody Copy: " + competitorBody + "\n\nYOUR PRODUCT: " + yourProduct + "\nTARGET AUDIENCE: " + audience;
+    const prompt = "You are JARVIS Competitor Intelligence. Be brutally concise.\n\n" + adContent + "\n\nReturn ONLY this structure. Nothing else. No explanations.\n\nTheir Angle: one sentence.\nTheir Weakness: one sentence.\nYour Winning Move: one sentence.\n\n---\n\nYour Winning Ad:\nHeadline:\nBody Copy: 2-3 sentences only.\nCTA:";
     const jarvis = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1500,
-      messages: [{ role: "user", content: synthPrompt }]
+      max_tokens: 400,
+      messages: [{ role: "user", content: prompt }]
     });
-
     const result = (jarvis.content[0] as { text: string }).text;
     return NextResponse.json({ result });
-
   } catch (error) {
     console.error("Competitor spy error:", error);
     return NextResponse.json({ error: "Analysis failed. Please try again." }, { status: 500 });

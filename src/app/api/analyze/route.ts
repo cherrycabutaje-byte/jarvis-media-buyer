@@ -20,14 +20,14 @@ export async function POST(req: Request) {
     const isAutoDetect = language === "Auto-Detect" || language === "auto" || language === "";
     const isEnglish = language === "English";
     const li = isAutoDetect
-      ? "Detect the language of the marketing information provided and respond entirely in that same language. If the input is in English respond in English. If the input is in Tagalog respond in Tagalog. If the input is in Spanish respond in Spanish. Match the language of the input exactly."
+      ? "Detect the language of the marketing information and respond in that same language."
       : isEnglish
       ? "Respond in English."
-      : "YOUR RESPONSE MUST BE 100% IN " + language.toUpperCase() + ". NOT ONE WORD IN ENGLISH. EVERY HEADING, LABEL, SENTENCE MUST BE IN " + language.toUpperCase() + ".";
+      : "YOUR RESPONSE MUST BE 100% IN " + language.toUpperCase() + ". EVERY WORD MUST BE IN " + language.toUpperCase() + ".";
     const mi = "MODE: " + mode + ". " + (mode === "quick" ? "Maximum 500 words." : "Maximum 900 words.");
-    const expertMaxTokens = mode === "quick" ? 512 : 1024;
+    const expertMaxTokens = 300;
     const jarvisMaxTokens = mode === "quick" ? 800 : 2048;
-    const mc = (p: string) => li + "\n\n" + p + "\n\n" + mi + "\n\nMarketing Information:\n" + input;
+    const mc = (p: string) => p + "\n\nMarketing Information:\n" + input;
     const [ps, mb, gs, os] = await Promise.all([
       client.messages.create({ model: "claude-sonnet-4-6", max_tokens: expertMaxTokens, messages: [{ role: "user", content: mc(psychologistPrompt) }] }),
       client.messages.create({ model: "claude-sonnet-4-6", max_tokens: expertMaxTokens, messages: [{ role: "user", content: mc(mediaBuyerPrompt) }] }),
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     const mo = (mb.content[0] as { text: string }).text;
     const go = (gs.content[0] as { text: string }).text;
     const oo = (os.content[0] as { text: string }).text;
-    const jc = li + "\n\n" + jarvisSynthesizerPrompt + "\n\n" + mi + "\n\n---\nCONSUMER PSYCHOLOGIST:\n" + po + "\n\n---\nMEDIA BUYER:\n" + mo + "\n\n---\nGROWTH STRATEGIST:\n" + go + "\n\n---\nOFFER STRATEGIST:\n" + oo + "\n\n---\nOriginal Marketing Information:\n" + input;
+    const jc = li + "\n\n" + jarvisSynthesizerPrompt + "\n\n" + mi + "\n\n---\nEXPERT SIGNALS:\n\nPSYCHOLOGIST SIGNALS:\n" + po + "\n\nMEDIA BUYER SIGNALS:\n" + mo + "\n\nGROWTH STRATEGIST SIGNALS:\n" + go + "\n\nOFFER STRATEGIST SIGNALS:\n" + oo + "\n\n---\nOriginal Marketing Information:\n" + input;
     const jarvis = await client.messages.create({ model: "claude-sonnet-4-6", max_tokens: jarvisMaxTokens, messages: [{ role: "user", content: jc }] });
     const result = (jarvis.content[0] as { text: string }).text;
     return NextResponse.json({ result });
