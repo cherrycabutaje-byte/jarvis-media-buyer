@@ -12,7 +12,7 @@ alter table publishing_credentials
   add column platform_account_id text;
 
 create table publishing_platforms (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   name text not null unique,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
@@ -23,7 +23,7 @@ create type publication_status as enum (
 );
 
 create table publications (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   asset_id uuid not null references assets(id),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   platform_id uuid not null references publishing_platforms(id),

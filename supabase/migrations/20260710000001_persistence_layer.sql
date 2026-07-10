@@ -5,8 +5,6 @@
 -- Architecture Version 1.0 - FROZEN
 -- ============================================================
 
-create extension if not exists "uuid-ossp";
-
 create table profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
@@ -14,7 +12,7 @@ create table profiles (
 );
 
 create table workspaces (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   name text not null,
   owner_id uuid not null references profiles(id),
   created_at timestamptz not null default now(),
@@ -32,7 +30,7 @@ create table workspace_members (
 );
 
 create table brands (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   name text not null,
   website text,
@@ -46,7 +44,7 @@ create index idx_brands_workspace on brands(workspace_id);
 create type brain_run_status as enum ('complete', 'partial', 'unknown', 'invalidated');
 
 create table brain_runs (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   brand_id uuid not null references brands(id) on delete cascade,
   architecture_version text not null,
   business_input jsonb not null,
@@ -66,7 +64,7 @@ create unique index idx_brain_runs_one_current
 create type product_status as enum ('pending', 'building', 'ready', 'failed');
 
 create table products (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   brand_id uuid not null references brands(id) on delete cascade,
   brain_run_id uuid not null references brain_runs(id),
@@ -84,7 +82,7 @@ create index idx_products_brand on products(brand_id);
 create index idx_products_brain_run on products(brain_run_id);
 
 create table variations (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   product_id uuid not null references products(id) on delete cascade,
   variation_id text not null,
   variation_definition jsonb not null,
@@ -98,7 +96,7 @@ create index idx_variations_product on variations(product_id);
 create type asset_status as enum ('draft', 'ready', 'published');
 
 create table assets (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   product_id uuid not null references products(id) on delete cascade,
   version_number integer not null,
   parent_asset_id uuid references assets(id),
@@ -113,7 +111,7 @@ create index idx_assets_product on assets(product_id);
 create index idx_assets_parent on assets(parent_asset_id);
 
 create table provider_credentials (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   provider_name text not null,
   encrypted_credential text not null,
@@ -122,7 +120,7 @@ create table provider_credentials (
 );
 
 create table publishing_credentials (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   platform_name text not null,
   encrypted_credential text not null,

@@ -5,8 +5,6 @@
 -- Architecture Version 1.0 - FROZEN
 -- ============================================================
 
-alter type workspace_role add value 'viewer';
-
 create or replace function workspace_role_rank(r workspace_role)
 returns int
 language sql
@@ -227,13 +225,13 @@ alter table publishing_credentials enable row level security;
 create type invite_status as enum ('pending', 'accepted', 'revoked', 'expired');
 
 create table workspace_invites (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   email text not null,
   role workspace_role not null default 'member',
   invited_by uuid not null references profiles(id),
   status invite_status not null default 'pending',
-  token uuid not null default uuid_generate_v4(),
+  token uuid not null default gen_random_uuid(),
   created_at timestamptz not null default now(),
   expires_at timestamptz not null default (now() + interval '7 days')
 );

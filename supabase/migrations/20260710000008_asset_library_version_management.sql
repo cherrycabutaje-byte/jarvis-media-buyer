@@ -15,7 +15,7 @@ alter table assets
   add column regeneration_reason text;
 
 create table asset_approvals (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   asset_id uuid not null references assets(id) on delete cascade,
   decision approval_decision not null,
   reviewed_by uuid not null references profiles(id),

@@ -21,7 +21,7 @@ create type job_status as enum (
 );
 
 create table jobs (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   product_id uuid references products(id) on delete cascade,
   variation_id uuid references variations(id) on delete cascade,

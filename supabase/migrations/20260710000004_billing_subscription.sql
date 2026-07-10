@@ -13,7 +13,7 @@ alter table workspaces
   add column status workspace_status not null default 'trialing';
 
 create table plans (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   key text not null unique,
   name text not null,
   stripe_product_id text,
@@ -25,7 +25,7 @@ create table plans (
 );
 
 create table plan_prices (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   plan_id uuid not null references plans(id) on delete cascade,
   stripe_price_id text not null unique,
   billing_interval text not null,
@@ -40,7 +40,7 @@ create type subscription_status as enum (
 );
 
 create table subscriptions (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null unique references workspaces(id) on delete cascade,
   plan_id uuid not null references plans(id),
   plan_price_id uuid references plan_prices(id),
@@ -67,7 +67,7 @@ create type credit_transaction_type as enum (
 );
 
 create table credit_ledger (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   transaction_type credit_transaction_type not null,
   amount integer not null,
@@ -86,7 +86,7 @@ create type usage_event_type as enum (
 );
 
 create table usage_events (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   event_type usage_event_type not null,
   related_product_id uuid references products(id),

@@ -8,7 +8,7 @@
 create type provider_capability as enum ('text', 'image', 'video');
 
 create table providers (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   name text not null unique,
   capability provider_capability not null,
   is_active boolean not null default true,
@@ -16,7 +16,7 @@ create table providers (
 );
 
 create table platform_provider_credentials (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   provider_id uuid not null references providers(id) on delete cascade,
   encrypted_credential text not null,
   created_at timestamptz not null default now(),

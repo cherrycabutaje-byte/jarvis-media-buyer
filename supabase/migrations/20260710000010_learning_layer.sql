@@ -6,7 +6,7 @@
 -- ============================================================
 
 create table performance_records (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   publication_id uuid not null references publications(id) on delete cascade,
   recorded_at timestamptz not null default now(),
   metrics jsonb not null default '{}'::jsonb,
@@ -23,7 +23,7 @@ create table performance_summary (
 );
 
 create table experiment_records (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   product_id uuid not null references products(id),
   variation_id uuid not null references variations(id),
   campaign_intelligence_snapshot jsonb not null,
@@ -42,7 +42,7 @@ create table winning_variations (
 );
 
 create table learning_insights (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   scope_category text,
   scope_framework text,
   insight_type text not null,
