@@ -31,13 +31,18 @@ const BRAIN_RUN_COLUMNS =
 /**
  * Persists one Brain pipeline execution as a brain_runs row.
  *
- * Scope note: this only creates a NEW current run - it does not
- * handle superseding an existing current run for the same brand. If
- * the brand already has a current run, the existing
- * idx_brain_runs_one_current partial unique index (migration 001)
- * will correctly reject this insert. Handling re-analysis /
- * supersession is a known, separately-flagged future concern, not
- * solved by this minimal first-execution slice.
+ * FIX: startedAt, completedAt, and durationMs are now required
+ * parameters, explicitly captured by the caller around the actual
+ * pipeline execution - previously these were never passed, leaving
+ * completed_at and duration_ms permanently NULL even on successful
+ * runs. This is the minimal correction for that gap; no other
+ * behavior changed.
+ *
+ * Scope note (unchanged from before): this only creates a NEW current
+ * run - it does not handle superseding an existing current run for
+ * the same brand. If the brand already has a current run, the
+ * existing idx_brain_runs_one_current partial unique index
+ * (migration 001) will correctly reject this insert.
  */
 export async function createBrainRun(params: {
   brandId: string
@@ -46,6 +51,9 @@ export async function createBrainRun(params: {
   intelligencePipeline: Record<string, unknown>
   businessStateHash: string
   status: BrainRunStatus
+  startedAt: string
+  completedAt: string
+  durationMs: number
 }): Promise<RepositoryResult<BrainRun>> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -59,6 +67,9 @@ export async function createBrainRun(params: {
       status: params.status,
       is_current: true,
       execution_status: "succeeded",
+      started_at: params.startedAt,
+      completed_at: params.completedAt,
+      duration_ms: params.durationMs,
     })
     .select(BRAIN_RUN_COLUMNS)
     .single()

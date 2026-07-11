@@ -50,13 +50,12 @@ function aggregateRunStatus(pipeline: BrainPipelineOutput): BrainRunStatus {
  * Server Action: runs the Brain pipeline for a brand and persists the
  * result as a brain_runs row.
  *
- * runBrainPipeline() itself remains pure (no Supabase, no
- * persistence, no AI calls) - this action is the only place that
- * calls it AND persists its output, via BrainRunRepository. This
- * matches the recorded architectural pattern: bootstrap/transactional
- * concerns aside, this is ordinary Client -> Server Action ->
- * Repository -> RLS -> Database flow, just with a pure computation
- * step inserted between the auth check and the persistence call.
+ * FIX: startedAt and completedAt are now explicitly captured around
+ * the runBrainPipeline() call, and durationMs is computed from their
+ * difference - previously these were never captured, leaving
+ * completed_at and duration_ms permanently NULL in the database even
+ * on successful runs. runBrainPipeline() itself is untouched and
+ * remains pure - timing is measured by this caller, not the pipeline.
  */
 export async function runBrainAnalysisAction(
   brandId: string,
@@ -77,6 +76,8 @@ export async function runBrainAnalysisAction(
     return { success: false, data: null, error: "Product name and description are required." }
   }
 
+  const startedAt = new Date()
+
   let pipelineOutput: BrainPipelineOutput
   try {
     pipelineOutput = runBrainPipeline(businessInput)
@@ -88,6 +89,9 @@ export async function runBrainAnalysisAction(
     }
   }
 
+  const completedAt = new Date()
+  const durationMs = completedAt.getTime() - startedAt.getTime()
+
   const businessStateHash = computeBusinessStateHash(businessInput)
   const status = aggregateRunStatus(pipelineOutput)
 
@@ -98,6 +102,9 @@ export async function runBrainAnalysisAction(
     intelligencePipeline: pipelineOutput as unknown as Record<string, unknown>,
     businessStateHash,
     status,
+    startedAt: startedAt.toISOString(),
+    completedAt: completedAt.toISOString(),
+    durationMs,
   })
 
   if (result.error) {
