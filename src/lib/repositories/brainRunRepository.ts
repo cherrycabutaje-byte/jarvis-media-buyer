@@ -31,13 +31,6 @@ const BRAIN_RUN_COLUMNS =
 /**
  * Persists one Brain pipeline execution as a brain_runs row.
  *
- * FIX: startedAt, completedAt, and durationMs are now required
- * parameters, explicitly captured by the caller around the actual
- * pipeline execution - previously these were never passed, leaving
- * completed_at and duration_ms permanently NULL even on successful
- * runs. This is the minimal correction for that gap; no other
- * behavior changed.
- *
  * Scope note (unchanged from before): this only creates a NEW current
  * run - it does not handle superseding an existing current run for
  * the same brand. If the brand already has a current run, the
@@ -100,4 +93,32 @@ export async function getCurrentBrainRunForBrand(
     return { data: null, error: error.message }
   }
   return { data: data as BrainRun | null, error: null }
+}
+
+/**
+ * ADDITIVE (Slice 4): fetches a specific brain_run by its own id.
+ *
+ * This is the architecturally correct way to resolve "which analysis
+ * produced this product" - products.brain_run_id is the authoritative
+ * source, not "whatever is currently the brand's newest run" (which
+ * getCurrentBrainRunForBrand answers a different, related but
+ * distinct question). Using this function instead of substituting
+ * getCurrentBrainRunForBrand() keeps persistence correctly tied to
+ * the product's own recorded brain_run_id, which will matter once
+ * re-analysis/supersession exists (already a known, separately
+ * tracked future item) and a brand's current run may no longer be
+ * the one a given product was actually built from.
+ */
+export async function getBrainRunById(brainRunId: string): Promise<RepositoryResult<BrainRun>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("brain_runs")
+    .select(BRAIN_RUN_COLUMNS)
+    .eq("id", brainRunId)
+    .single()
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+  return { data: data as BrainRun, error: null }
 }
