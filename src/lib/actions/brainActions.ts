@@ -6,10 +6,12 @@ import { computeBusinessStateHash } from "@/lib/brain/businessStateHash"
 import { createBrainRun, type BrainRun, type BrainRunStatus } from "@/lib/repositories/brainRunRepository"
 import type { BusinessInput } from "@/lib/jarvis-brain/types"
 
-// ASSUMPTION - not verified against a canonical source. Based on the
-// original Brain technical documentation referenced earlier in this
-// project. Confirm or correct before relying on this value.
-const JARVIS_BRAIN_ARCHITECTURE_VERSION = "V4.3"
+// TODO: no authoritative architecture version string was found or
+// confirmed anywhere in the project. Using a neutral placeholder per
+// explicit decision, rather than inventing a version number. This
+// should be standardized once versioning is addressed as its own
+// task - not assumed here.
+const JARVIS_BRAIN_ARCHITECTURE_VERSION = "Architecture Version (TBD)"
 
 export interface RunBrainAnalysisResult {
   success: boolean
