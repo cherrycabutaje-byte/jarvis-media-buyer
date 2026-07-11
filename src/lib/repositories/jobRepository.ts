@@ -40,10 +40,6 @@ export interface RepositoryResult<T> {
 const JOB_COLUMNS =
   "id, workspace_id, product_id, variation_id, job_type, status, priority, payload, result, attempt_count, max_attempts, last_error, credits_reserved, idempotency_key, scheduled_at, started_at, completed_at, locked_by, locked_at, created_at"
 
-/**
- * Fetches the operational policy (max_attempts, timeout_seconds,
- * base_backoff_seconds) for a given job_type from job_type_policies.
- */
 export async function getJobTypePolicy(jobType: JobType): Promise<RepositoryResult<JobTypePolicy>> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -58,14 +54,6 @@ export async function getJobTypePolicy(jobType: JobType): Promise<RepositoryResu
   return { data: data as JobTypePolicy, error: null }
 }
 
-/**
- * Creates one queued job. This is queue insertion only - no
- * claiming, no worker, no provider call. variation_id is
- * intentionally omitted (left NULL) - the Brain's variation concept
- * currently lives only inside brain_runs.intelligence_pipeline JSON,
- * not as a separate persisted row in any variations table, so there
- * is nothing real to reference here yet.
- */
 export async function createJob(params: {
   workspaceId: string
   productId: string
@@ -94,4 +82,20 @@ export async function createJob(params: {
     return { data: null, error: error.message }
   }
   return { data: data as Job, error: null }
+}
+
+/**
+ * ADDITIVE (Slice 3): calls the claim_next_job() SECURITY DEFINER
+ * function (migration 018) via RPC. Returns null data (not an
+ * error) when no eligible job exists - this is the normal,
+ * expected "queue is empty" case, not a failure.
+ */
+export async function claimNextJob(lockedBy: string): Promise<RepositoryResult<Job | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("claim_next_job", { p_locked_by: lockedBy })
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+  return { data: (data as Job | null) ?? null, error: null }
 }
