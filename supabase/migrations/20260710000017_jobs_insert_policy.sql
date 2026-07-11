@@ -1,0 +1,41 @@
+-- ============================================================
+-- JARVIS Platform Foundation
+-- Migration: 017_jobs_insert_policy
+-- Additive fix - genuine RLS policy gap, not an architectural defect
+--
+-- Migration 011 (security hardening) enabled RLS on jobs and added
+-- a SELECT policy (members_can_view_jobs), but no INSERT policy was
+-- ever added. With RLS enabled and no INSERT policy, every insert
+-- attempt is rejected by default - jobs could be read once created,
+-- but never created at all.
+--
+-- Discovered as a real, reproducible defect during Provider Adapter
+-- Slice 1 (First Job Creation): createJob()'s insert into jobs
+-- failed with "new row violates row-level security policy for
+-- table 'jobs'" as an authenticated user, immediately after the
+-- prior job_type_policies read gap (migration 016) was fixed.
+--
+-- Fix mirrors the established, existing pattern already used for
+-- every other admin-gated creation action in this system:
+--   admins_can_create_brands      (migration 003)
+--   admins_can_create_products    (migration 003)
+--   admins_can_trigger_brain_runs (migration 003)
+-- All require admin rank (not just membership) via
+-- is_workspace_member(workspace_id, 'admin'), since creating a
+-- resource that consumes credits and triggers downstream work is a
+-- write action, not a read action. Job creation is the same
+-- sensitivity class - it reserves credits and queues real AI
+-- provider work - so this policy follows the same admin-rank
+-- requirement, not the lesser 'viewer' rank already used for
+-- members_can_view_jobs (SELECT).
+--
+-- No UPDATE or DELETE policy is added here - those remain out of
+-- scope for this fix and belong to their own future slices (job
+-- status transitions will be driven by the Worker, a later slice,
+-- likely via a SECURITY DEFINER function rather than a broad UPDATE
+-- policy, matching the workspace bootstrap precedent).
+-- ============================================================
+
+create policy "admins_can_create_jobs"
+  on jobs for insert
+  with check (is_workspace_member(workspace_id, 'admin'));
