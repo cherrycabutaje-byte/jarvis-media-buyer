@@ -16,9 +16,6 @@ export interface RepositoryResult<T> {
 
 const WORKSPACE_COLUMNS = 'id, name, owner_id, status, created_at, updated_at'
 
-/**
- * Fetches a single workspace by id.
- */
 export async function getWorkspaceById(workspaceId: string): Promise<RepositoryResult<Workspace>> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -33,9 +30,6 @@ export async function getWorkspaceById(workspaceId: string): Promise<RepositoryR
   return { data: data as Workspace, error: null }
 }
 
-/**
- * Fetches every workspace a given user belongs to, via workspace_members.
- */
 export async function getWorkspacesForUser(userId: string): Promise<RepositoryResult<Workspace[]>> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -56,54 +50,45 @@ export async function getWorkspacesForUser(userId: string): Promise<RepositoryRe
 /**
  * Creates a workspace and its owner membership row together.
  *
- * A workspace's owner is only granted access through a workspace_members
- * row (role 'owner') - RLS policies (migration 003) check
- * is_workspace_member(), not the owner_id column. Creating only the
- * workspaces row would produce a workspace invisible to its own owner.
- * This is a correctness requirement of the frozen schema, not
- * additional business logic.
+ * UPDATED (migration 013): this now calls the create_workspace_with_owner
+ * SECURITY DEFINER database function via RPC, rather than performing two
+ * separate client-side inserts with a best-effort compensating delete.
+ * This is a genuine architectural improvement, not a workaround:
  *
- * Note: PostgREST does not support multi-table client-side
- * transactions, so if the membership insert fails after the workspace
- * insert succeeds, this performs a best-effort compensating delete
- * rather than a guaranteed atomic rollback. A future, separately
- * approved migration adding a dedicated Postgres function (e.g.
- * create_workspace_with_owner) would make this atomic - flagged here,
- * not implemented, since Database Version 1.0 is frozen.
+ * - Atomicity: the database function executes both inserts as one
+ *   transaction. If either fails, both roll back - guaranteed by
+ *   Postgres itself, not approximated by application code.
+ * - Security: the function derives the owner from auth.uid() inside
+ *   the database, never trusting client input for identity. The
+ *   `ownerId` parameter below is therefore no longer actually used -
+ *   it is accepted (for now) only to avoid changing this function's
+ *   public signature and the call site in workspaceActions.ts. This
+ *   is a deliberate, minimal-footprint choice for this fix; a future
+ *   cleanup pass should remove this now-vestigial parameter from both
+ *   this function and its caller together.
+ *
+ * See migration 013_workspace_bootstrap_function.sql for the full
+ * architectural rationale (RLS bootstrap circular dependency between
+ * workspaces and workspace_members).
  */
 export async function createWorkspace(
   name: string,
-  ownerId: string
+  _ownerId: string
 ): Promise<RepositoryResult<Workspace>> {
   const supabase = await createClient()
 
-  const { data: workspace, error: workspaceError } = await supabase
-    .from('workspaces')
-    .insert({ name, owner_id: ownerId })
+  const { data, error } = await supabase
+    .rpc('create_workspace_with_owner', { p_name: name })
     .select(WORKSPACE_COLUMNS)
     .single()
 
-  if (workspaceError || !workspace) {
-    return { data: null, error: workspaceError?.message ?? 'Failed to create workspace.' }
+  if (error) {
+    return { data: null, error: error.message }
   }
 
-  const createdWorkspace = workspace as Workspace
-
-  const { error: memberError } = await supabase
-    .from('workspace_members')
-    .insert({ workspace_id: createdWorkspace.id, user_id: ownerId, role: 'owner' })
-
-  if (memberError) {
-    await supabase.from('workspaces').delete().eq('id', createdWorkspace.id)
-    return { data: null, error: memberError.message }
-  }
-
-  return { data: createdWorkspace, error: null }
+  return { data: data as Workspace, error: null }
 }
 
-/**
- * Updates a workspace's name and returns the updated row.
- */
 export async function updateWorkspaceName(
   workspaceId: string,
   name: string
