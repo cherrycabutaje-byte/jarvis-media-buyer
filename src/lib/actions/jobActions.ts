@@ -19,12 +19,6 @@ export interface CreateJobResult {
   error: string | null
 }
 
-/**
- * Priority values sourced from the original Component 5 (Job Queue)
- * validation testing - text before image, matching Decision
- * Engine's established execution order (lower number = higher
- * priority). Not invented for this slice.
- */
 const PRIORITY_BY_JOB_TYPE: Record<"text_generation" | "image_generation", number> = {
   text_generation: 100,
   image_generation: 200,
@@ -32,17 +26,22 @@ const PRIORITY_BY_JOB_TYPE: Record<"text_generation" | "image_generation", numbe
 
 /**
  * Server Action: creates one queued job for a product, using the
- * already-validated Builder chain to produce the job's payload
- * (a ProviderPrompt for text, an ImagePromptObject for image).
+ * already-validated Builder chain to produce the job's payload.
  *
- * This is queue insertion ONLY. No worker, no SKIP LOCKED claiming,
- * no provider resolution, no provider call (mock or real), no
- * asset creation, no publishing - those all belong to later,
- * separate slices.
+ * PERMANENT QUEUE CONTRACT (fixed after a genuine defect was found
+ * in Worker Execution testing): jobs.payload stores the executable
+ * artifact itself - the bare ProviderPrompt or ImagePromptObject
+ * (i.e. .findings) - NOT the Builder wrapper
+ * (IntelligenceModuleResult<T>, with module/status/confidence/
+ * evidence/unknowns/recommendationsForNext). The Worker deserializes
+ * directly into ProviderPrompt/ImagePromptObject with no knowledge
+ * of Builder wrapper types - this is the boundary: Builder Layer
+ * concerns (confidence, evidence, etc.) stay inside the Builder
+ * Layer's own execution, they are never persisted onto the queue.
  *
  * Executes no new business logic - only orchestrates the existing,
  * frozen, individually-validated pure functions (Modules 11-16),
- * exactly as builderActions.ts already does for persistence.
+ * exactly as before. Only the shape of what gets persisted changed.
  */
 export async function createJobAction(
   productId: string,
@@ -80,11 +79,11 @@ export async function createJobAction(
 
     if (jobType === "text_generation") {
       const providerPromptResult = runPromptBuilder(pipeline, decisionRecordResult)
-      payload = providerPromptResult as unknown as Record<string, unknown>
+      payload = providerPromptResult.findings as unknown as Record<string, unknown>
     } else {
       const creativeAssetResult = runCreativeAssetBuilder(pipeline, decisionRecordResult)
       const imagePromptResult = runImagePromptBuilder(creativeAssetResult.findings, decisionRecordResult)
-      payload = imagePromptResult as unknown as Record<string, unknown>
+      payload = imagePromptResult.findings as unknown as Record<string, unknown>
     }
   } catch (err) {
     return {
