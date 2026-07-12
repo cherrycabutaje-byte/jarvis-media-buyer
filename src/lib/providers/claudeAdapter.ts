@@ -5,9 +5,9 @@ import type { ProviderPrompt } from "@/lib/jarvis-brain/types"
  * Real Provider Adapter for Claude (Anthropic Messages API).
  *
  * Implements the existing, frozen TextProviderAdapter interface
- * (Slice 4) - no interface changes. This is the ONLY concrete
+ * (Slice 4) - no interface changes. This was the only concrete
  * implementation change in Slice 5; the Worker and the interface
- * itself are both untouched.
+ * itself were both untouched.
  *
  * Configuration:
  * - ANTHROPIC_API_KEY - read directly from process.env. No database,
@@ -19,12 +19,11 @@ import type { ProviderPrompt } from "@/lib/jarvis-brain/types"
  *   replaceable by a future provider_models table lookup later,
  *   without changing this call site's shape.
  *
- * Field mapping is deliberately defensive rather than assumed: the
- * real Anthropic Messages API response is inspected at runtime
- * (temporary raw-response logging included below, to be removed
- * once the real shape is confirmed against a live call) rather than
- * trusting a remembered shape. usage is only populated if the API
- * response actually includes it - never invented.
+ * Field mapping was validated against a real live Anthropic response
+ * (Slice 5 validation) - confirmed working correctly, including
+ * content array ordering (a "thinking" block precedes the "text"
+ * block; mapping uses .find(b => b.type === "text") rather than a
+ * positional index), stop_reason mapping, and usage field presence.
  */
 
 // Documented default per current model information. Confirm/override
@@ -78,11 +77,6 @@ export const claudeAdapter: TextProviderAdapter = {
     }
 
     const rawBody = await response.text()
-    // TEMPORARY DIAGNOSTIC - to be removed once the real response
-    // shape is confirmed. Logs the raw Anthropic response so the
-    // actual field names can be verified against real evidence
-    // rather than assumed.
-    console.log("[claudeAdapter] raw response:", rawBody)
 
     let parsed: unknown
     try {

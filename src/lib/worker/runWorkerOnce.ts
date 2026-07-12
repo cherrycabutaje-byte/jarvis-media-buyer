@@ -14,10 +14,10 @@ export interface WorkerRunResult {
  * appropriate provider via the registry (resolveTextProvider /
  * resolveImageProvider - the Worker no longer knows how providers
  * are selected, only that it can ask for one), executes it, and
- * logs the mock result. Stops immediately after - no asset
- * persistence, no retry/dead-letter handling, no publishing, and
- * still no real external API call - the resolved provider is always
- * a mock in this slice. All of that belongs to later slices.
+ * logs the result. Stops immediately after - no asset persistence,
+ * no retry/dead-letter handling, no publishing. The resolved
+ * provider may be a mock (image, currently) or a real adapter
+ * (text, as of Slice 5) - the Worker has no knowledge of which.
  */
 export async function runWorkerOnce(workerId: string): Promise<WorkerRunResult> {
   const logLines: string[] = []
@@ -72,9 +72,7 @@ export async function runWorkerOnce(workerId: string): Promise<WorkerRunResult> 
     return { claimed: true, jobId: job.id, jobType: job.job_type, logLines }
   }
 
-  log(
-    `[worker] job ${job.id} processed locally with a mock provider - job remains in 'processing' pending later slices`
-  )
+  log(`[worker] job ${job.id} - Provider execution completed. Job remains in 'processing' pending later slices.`)
 
   return { claimed: true, jobId: job.id, jobType: job.job_type, logLines }
 }
