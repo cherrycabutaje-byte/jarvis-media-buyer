@@ -84,12 +84,6 @@ export async function createJob(params: {
   return { data: data as Job, error: null }
 }
 
-/**
- * ADDITIVE (Slice 3): calls the claim_next_job() SECURITY DEFINER
- * function (migration 018) via RPC. Returns null data (not an
- * error) when no eligible job exists - this is the normal,
- * expected "queue is empty" case, not a failure.
- */
 export async function claimNextJob(lockedBy: string): Promise<RepositoryResult<Job | null>> {
   const supabase = await createClient()
   const { data, error } = await supabase.rpc("claim_next_job", { p_locked_by: lockedBy })
@@ -98,4 +92,36 @@ export async function claimNextJob(lockedBy: string): Promise<RepositoryResult<J
     return { data: null, error: error.message }
   }
   return { data: (data as Job | null) ?? null, error: null }
+}
+
+/**
+ * ADDITIVE (Provider Result Persistence slice): completes a job by
+ * persisting its result, status, and completed_at atomically via
+ * the complete_job() SECURITY DEFINER function (migration 019).
+ *
+ * A business operation, not a generic update - matches the intent
+ * established by claimNextJob(). Designed to accept any JobStatus
+ * (not just "succeeded") so future failed/retrying/dead_letter
+ * transitions can reuse this same function without a new migration.
+ *
+ * Does NOT touch locked_by or locked_at - those remain exactly as
+ * claimNextJob() set them, confirmed via real database testing
+ * before this function was written.
+ */
+export async function completeJob(
+  jobId: string,
+  status: JobStatus,
+  result: Record<string, unknown>
+): Promise<RepositoryResult<Job>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("complete_job", {
+    p_job_id: jobId,
+    p_status: status,
+    p_result: result,
+  })
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+  return { data: data as Job, error: null }
 }

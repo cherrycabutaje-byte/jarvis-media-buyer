@@ -1,4 +1,4 @@
-import { claimNextJob } from "@/lib/repositories/jobRepository"
+import { claimNextJob, completeJob } from "@/lib/repositories/jobRepository"
 import { resolveTextProvider, resolveImageProvider } from "@/lib/providers/resolveProvider"
 import type { ProviderPrompt, ImagePromptObject } from "@/lib/jarvis-brain/types"
 
@@ -11,13 +11,14 @@ export interface WorkerRunResult {
 
 /**
  * Runs one worker cycle: claims the next eligible job, resolves the
- * appropriate provider via the registry (resolveTextProvider /
- * resolveImageProvider - the Worker no longer knows how providers
- * are selected, only that it can ask for one), executes it, and
- * logs the result. Stops immediately after - no asset persistence,
- * no retry/dead-letter handling, no publishing. The resolved
- * provider may be a mock (image, currently) or a real adapter
- * (text, as of Slice 5) - the Worker has no knowledge of which.
+ * appropriate provider, executes it, and - for text_generation only
+ * in this slice - persists the result via completeJob(), which
+ * atomically sets result/status/completed_at without touching
+ * locked_by/locked_at.
+ *
+ * image_generation remains unpersisted in this slice, unchanged -
+ * still just logged and left in 'processing'. Real image provider
+ * integration and its own persistence are separate, later work.
  */
 export async function runWorkerOnce(workerId: string): Promise<WorkerRunResult> {
   const logLines: string[] = []
@@ -55,6 +56,18 @@ export async function runWorkerOnce(workerId: string): Promise<WorkerRunResult> 
 
       const result = await provider.execute(prompt)
       log(`[worker] provider execution complete - finishReason: ${result.finishReason}, rawText: ${result.rawText}`)
+
+      const completeResult = await completeJob(job.id, "succeeded", {
+        rawText: result.rawText,
+        finishReason: result.finishReason,
+        usage: result.usage,
+        providerMetadata: result.providerMetadata,
+      })
+      if (completeResult.error) {
+        log(`[worker] failed to persist job completion: ${completeResult.error}`, true)
+      } else {
+        log(`[worker] job ${job.id} completed and persisted - status: succeeded`)
+      }
     } else if (job.job_type === "image_generation") {
       const prompt = job.payload as unknown as ImagePromptObject
       log(`[worker] deserialized ImagePromptObject - style: ${prompt.style}, quality: ${prompt.quality}`)
@@ -64,6 +77,7 @@ export async function runWorkerOnce(workerId: string): Promise<WorkerRunResult> 
 
       const result = await provider.execute(prompt)
       log(`[worker] provider execution complete - finishReason: ${result.finishReason}, imageData: ${result.imageData}`)
+      log(`[worker] job ${job.id} - Provider execution completed. Job remains in 'processing' pending later slices.`)
     } else {
       log(`[worker] job_type "${job.job_type}" has no provider resolution defined yet in this slice`)
     }
@@ -71,8 +85,6 @@ export async function runWorkerOnce(workerId: string): Promise<WorkerRunResult> 
     log(`[worker] failed during processing: ${err instanceof Error ? err.message : String(err)}`, true)
     return { claimed: true, jobId: job.id, jobType: job.job_type, logLines }
   }
-
-  log(`[worker] job ${job.id} - Provider execution completed. Job remains in 'processing' pending later slices.`)
 
   return { claimed: true, jobId: job.id, jobType: job.job_type, logLines }
 }
