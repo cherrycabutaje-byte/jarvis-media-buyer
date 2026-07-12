@@ -94,20 +94,6 @@ export async function claimNextJob(lockedBy: string): Promise<RepositoryResult<J
   return { data: (data as Job | null) ?? null, error: null }
 }
 
-/**
- * ADDITIVE (Provider Result Persistence slice): completes a job by
- * persisting its result, status, and completed_at atomically via
- * the complete_job() SECURITY DEFINER function (migration 019).
- *
- * A business operation, not a generic update - matches the intent
- * established by claimNextJob(). Designed to accept any JobStatus
- * (not just "succeeded") so future failed/retrying/dead_letter
- * transitions can reuse this same function without a new migration.
- *
- * Does NOT touch locked_by or locked_at - those remain exactly as
- * claimNextJob() set them, confirmed via real database testing
- * before this function was written.
- */
 export async function completeJob(
   jobId: string,
   status: JobStatus,
@@ -122,6 +108,32 @@ export async function completeJob(
 
   if (error) {
     return { data: null, error: error.message }
+  }
+  return { data: data as Job, error: null }
+}
+
+/**
+ * ADDITIVE (Job Failure & Retry Handling slice): records a job
+ * failure via the fail_job() SECURITY DEFINER function
+ * (migration 021), which atomically decides retry-vs-dead-letter
+ * and computes backoff scheduling - this repository function does
+ * not read attempt_count/max_attempts itself, matching the
+ * established pattern for claimNextJob()/completeJob().
+ */
+export async function failJob(
+  jobId: string,
+  error: string,
+  retryable: boolean
+): Promise<RepositoryResult<Job>> {
+  const supabase = await createClient()
+  const { data, error: rpcError } = await supabase.rpc("fail_job", {
+    p_job_id: jobId,
+    p_error: error,
+    p_retryable: retryable,
+  })
+
+  if (rpcError) {
+    return { data: null, error: rpcError.message }
   }
   return { data: data as Job, error: null }
 }

@@ -1,4 +1,4 @@
-import { claimNextJob, completeJob } from "@/lib/repositories/jobRepository"
+import { claimNextJob, completeJob, failJob } from "@/lib/repositories/jobRepository"
 import { resolveTextProvider, resolveImageProvider } from "@/lib/providers/resolveProvider"
 import type { ProviderPrompt, ImagePromptObject } from "@/lib/jarvis-brain/types"
 
@@ -12,13 +12,13 @@ export interface WorkerRunResult {
 /**
  * Runs one worker cycle: claims the next eligible job, resolves the
  * appropriate provider, executes it, and - for text_generation only
- * in this slice - persists the result via completeJob(), which
- * atomically sets result/status/completed_at without touching
- * locked_by/locked_at.
+ * in this slice - persists either success (completeJob) or failure
+ * (failJob) depending on the provider's own finishReason/retryable
+ * classification. failJob() atomically decides retry vs dead-letter
+ * and computes backoff scheduling - the Worker does not make that
+ * decision itself.
  *
- * image_generation remains unpersisted in this slice, unchanged -
- * still just logged and left in 'processing'. Real image provider
- * integration and its own persistence are separate, later work.
+ * image_generation remains unpersisted in this slice, unchanged.
  */
 export async function runWorkerOnce(workerId: string): Promise<WorkerRunResult> {
   const logLines: string[] = []
@@ -57,16 +57,26 @@ export async function runWorkerOnce(workerId: string): Promise<WorkerRunResult> 
       const result = await provider.execute(prompt)
       log(`[worker] provider execution complete - finishReason: ${result.finishReason}, rawText: ${result.rawText}`)
 
-      const completeResult = await completeJob(job.id, "succeeded", {
-        rawText: result.rawText,
-        finishReason: result.finishReason,
-        usage: result.usage,
-        providerMetadata: result.providerMetadata,
-      })
-      if (completeResult.error) {
-        log(`[worker] failed to persist job completion: ${completeResult.error}`, true)
+      if (result.finishReason === "error") {
+        const errorMessage = (result.providerMetadata?.error as string | undefined) ?? "Unknown provider error"
+        const failResult = await failJob(job.id, errorMessage, result.retryable)
+        if (failResult.error) {
+          log(`[worker] failed to persist job failure: ${failResult.error}`, true)
+        } else {
+          log(`[worker] job ${job.id} failure persisted - status: ${failResult.data?.status}`)
+        }
       } else {
-        log(`[worker] job ${job.id} completed and persisted - status: succeeded`)
+        const completeResult = await completeJob(job.id, "succeeded", {
+          rawText: result.rawText,
+          finishReason: result.finishReason,
+          usage: result.usage,
+          providerMetadata: result.providerMetadata,
+        })
+        if (completeResult.error) {
+          log(`[worker] failed to persist job completion: ${completeResult.error}`, true)
+        } else {
+          log(`[worker] job ${job.id} completed and persisted - status: succeeded`)
+        }
       }
     } else if (job.job_type === "image_generation") {
       const prompt = job.payload as unknown as ImagePromptObject
