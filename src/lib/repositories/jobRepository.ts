@@ -112,14 +112,6 @@ export async function completeJob(
   return { data: data as Job, error: null }
 }
 
-/**
- * ADDITIVE (Job Failure & Retry Handling slice): records a job
- * failure via the fail_job() SECURITY DEFINER function
- * (migration 021), which atomically decides retry-vs-dead-letter
- * and computes backoff scheduling - this repository function does
- * not read attempt_count/max_attempts itself, matching the
- * established pattern for claimNextJob()/completeJob().
- */
 export async function failJob(
   jobId: string,
   error: string,
@@ -134,6 +126,23 @@ export async function failJob(
 
   if (rpcError) {
     return { data: null, error: rpcError.message }
+  }
+  return { data: data as Job, error: null }
+}
+
+/**
+ * ADDITIVE (First Asset Creation slice): fetches a job by its own id,
+ * without claiming or modifying it. Uses the existing, unmodified
+ * members_can_view_jobs SELECT policy - no RLS gap here, unlike the
+ * INSERT/UPDATE gaps found in earlier slices, since read access was
+ * already correctly granted.
+ */
+export async function getJobById(jobId: string): Promise<RepositoryResult<Job>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.from("jobs").select(JOB_COLUMNS).eq("id", jobId).single()
+
+  if (error) {
+    return { data: null, error: error.message }
   }
   return { data: data as Job, error: null }
 }
