@@ -1,6 +1,7 @@
 import { claimNextJob, completeJob, failJob } from "@/lib/repositories/workerJobRepository"
 import { resolveTextProvider, resolveImageProvider } from "@/lib/providers/resolveProvider"
-import type { ProviderPrompt, ImagePromptObject } from "@/lib/jarvis-brain/types"
+import type { ImagePromptObject } from "@/lib/jarvis-brain/types"
+import { validateProviderPrompt } from "@/lib/jarvis-brain/validateProviderPrompt"
 
 export interface WorkerRunResult {
   claimed: boolean
@@ -48,7 +49,22 @@ export async function runWorkerOnce(workerId: string): Promise<WorkerRunResult> 
 
   try {
     if (job.job_type === "text_generation") {
-      const prompt = job.payload as unknown as ProviderPrompt
+      if (!validateProviderPrompt(job.payload)) {
+        log(`[worker] job ${job.id} has an invalid Worker payload (does not match the required ProviderPrompt contract) - marking dead_letter`, true)
+        const failResult = await failJob(
+          job.id,
+          "Invalid Worker payload: does not match the required ProviderPrompt contract",
+          false
+        )
+        if (failResult.error) {
+          log(`[worker] failed to persist job failure: ${failResult.error}`, true)
+        } else {
+          log(`[worker] job ${job.id} failure persisted - status: ${failResult.data?.status}`)
+        }
+        return { claimed: true, jobId: job.id, jobType: job.job_type, logLines }
+      }
+
+      const prompt = job.payload
       log(`[worker] deserialized ProviderPrompt - expectedDeliverables: ${prompt.expectedDeliverables.join(", ")}`)
 
       const provider = resolveTextProvider()
