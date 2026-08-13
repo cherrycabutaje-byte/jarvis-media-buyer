@@ -1,4 +1,4 @@
-import { claimNextJob, completeJob, failJob } from "@/lib/repositories/jobRepository"
+import { claimNextJob, completeJob, failJob } from "@/lib/repositories/workerJobRepository"
 import { resolveTextProvider, resolveImageProvider } from "@/lib/providers/resolveProvider"
 import type { ProviderPrompt, ImagePromptObject } from "@/lib/jarvis-brain/types"
 

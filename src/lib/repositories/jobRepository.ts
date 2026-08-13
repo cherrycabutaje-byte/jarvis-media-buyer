@@ -84,51 +84,8 @@ export async function createJob(params: {
   return { data: data as Job, error: null }
 }
 
-export async function claimNextJob(lockedBy: string): Promise<RepositoryResult<Job | null>> {
-  const supabase = await createClient()
-  const { data, error } = await supabase.rpc("claim_next_job", { p_locked_by: lockedBy })
 
-  if (error) {
-    return { data: null, error: error.message }
-  }
-  return { data: (data as Job | null) ?? null, error: null }
-}
 
-export async function completeJob(
-  jobId: string,
-  status: JobStatus,
-  result: Record<string, unknown>
-): Promise<RepositoryResult<Job>> {
-  const supabase = await createClient()
-  const { data, error } = await supabase.rpc("complete_job", {
-    p_job_id: jobId,
-    p_status: status,
-    p_result: result,
-  })
-
-  if (error) {
-    return { data: null, error: error.message }
-  }
-  return { data: data as Job, error: null }
-}
-
-export async function failJob(
-  jobId: string,
-  error: string,
-  retryable: boolean
-): Promise<RepositoryResult<Job>> {
-  const supabase = await createClient()
-  const { data, error: rpcError } = await supabase.rpc("fail_job", {
-    p_job_id: jobId,
-    p_error: error,
-    p_retryable: retryable,
-  })
-
-  if (rpcError) {
-    return { data: null, error: rpcError.message }
-  }
-  return { data: data as Job, error: null }
-}
 
 /**
  * ADDITIVE (First Asset Creation slice): fetches a job by its own id,

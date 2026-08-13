@@ -15,8 +15,23 @@ export interface RunWorkerActionResult {
  * runWorkerOnce() directly in its own process, not through this
  * browser-triggered action - this exists only so this slice can be
  * validated end-to-end without a separate worker process yet.
+ *
+ * PRODUCTION BOUNDARY (Authenticated Worker RPC Isolation slice):
+ * this action must never provide privileged Worker execution in
+ * production. The check below runs BEFORE runWorkerOnce() is
+ * called, and before any Worker client could be constructed -
+ * blocking this path entirely in production, regardless of who is
+ * logged in or what role they hold.
  */
 export async function runWorkerOnceAction(): Promise<RunWorkerActionResult> {
+  if (process.env.NODE_ENV === "production") {
+    return {
+      success: false,
+      data: null,
+      error: "Not available in production.",
+    }
+  }
+
   const supabase = await createClient()
   const { data: userData, error: userError } = await supabase.auth.getUser()
 
