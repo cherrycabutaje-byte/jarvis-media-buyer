@@ -1,4 +1,5 @@
 import { claimNextPublication, completePublication, failPublication } from "@/lib/repositories/workerPublicationRepository"
+import { getPublicationCredential } from "@/lib/repositories/workerCredentialRepository"
 import { mockPublicationProvider } from "@/lib/providers/mockPublicationProvider"
 
 export interface PublicationWorkerRunResult {
@@ -8,16 +9,26 @@ export interface PublicationWorkerRunResult {
 }
 
 /**
- * Runs one Publication Worker cycle: claim -> execute (mock
- * provider only, per explicit scope) -> complete or fail.
+ * Runs one Publication Worker cycle: claim -> retrieve credential ->
+ * execute (mock provider only, per explicit scope) -> complete or
+ * fail.
+ *
+ * CREDENTIAL RETRIEVAL (Secure Publishing Credential Retrieval
+ * slice): after claiming, before calling the provider, the decrypted
+ * credential is retrieved via getPublicationCredential(). The
+ * decrypted secret value itself is NEVER logged, NEVER included in
+ * logLines, and NEVER returned in PublicationWorkerRunResult - only
+ * the non-secret platformAccountId (already exposed to authenticated
+ * users elsewhere via list_publishing_credentials) is logged, purely
+ * to confirm retrieval succeeded. If no credential is configured for
+ * the publication's workspace+platform (the common case today, since
+ * no real credentials exist yet in this project), the publication is
+ * failed cleanly via failPublication() with error_category
+ * 'credential_error', and the provider is never called at all.
  *
  * Mirrors runWorkerOnce.ts's structure exactly - same logging
  * convention, same try/catch-then-failPublication safety net on an
- * unexpected error during processing (matching runWorkerOnce's own
- * discipline, though here the failure path itself is also captured
- * rather than left generically caught, since fail_publication is a
- * safe, idempotent-on-failure operation given the eligibility check
- * inside the frozen function).
+ * unexpected error during processing.
  */
 export async function runPublicationWorkerOnce(): Promise<PublicationWorkerRunResult> {
   const logLines: string[] = []
@@ -46,9 +57,28 @@ export async function runPublicationWorkerOnce(): Promise<PublicationWorkerRunRe
   log(`[publication-worker] claimed publication ${publication.id} (asset: ${publication.asset_id}, platform: ${publication.platform_id})`)
 
   try {
+    const credentialResult = await getPublicationCredential(publication.id)
+
+    if (credentialResult.error || !credentialResult.data) {
+      const errorMessage = credentialResult.error ?? "No publishing credential available."
+      log(`[publication-worker] credential retrieval failed for publication ${publication.id}: ${errorMessage}`, true)
+      const failResult = await failPublication(publication.id, errorMessage, "credential_error")
+      if (failResult.error) {
+        log(`[publication-worker] failed to persist failure: ${failResult.error}`, true)
+      } else {
+        log(`[publication-worker] publication ${publication.id} failed - status: ${failResult.data?.status}`)
+      }
+      return { claimed: true, publicationId: publication.id, logLines }
+    }
+
+    // Never log credentialResult.data.decryptedSecret. Only the
+    // non-secret platformAccountId is safe to log here.
+    log(`[publication-worker] credential retrieved for publication ${publication.id} (platform account: ${credentialResult.data.platformAccountId ?? "none"})`)
+
     const result = await mockPublicationProvider.execute({
       id: publication.id,
       platformId: publication.platform_id,
+      credential: credentialResult.data,
     })
 
     if (result.success) {
