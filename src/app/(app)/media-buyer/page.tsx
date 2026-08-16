@@ -127,12 +127,21 @@ export default async function MediaBuyerHomePage() {
                   {products.map((product) => (
                     <div key={product.id} style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px",
-                      background: "#080b12", border: "1px solid #1e293b", borderRadius: "10px",
+                      background: "#080b12", border: "1px solid #1e293b", borderRadius: "10px", gap: "12px", flexWrap: "wrap",
                     }}>
                       <span style={{ fontSize: "13px", color: "#e2e8f0", fontWeight: 600 }}>
                         {PRODUCT_TYPE_LABELS[product.product_type] ?? product.product_type}
                       </span>
-                      <ProductStatusBadge status={product.status} />
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <ProductStatusBadge status={product.status} />
+                        {product.brain_run_id && (
+                          <Link href={`/media-buyer/products/${product.id}`} style={{
+                            fontSize: "12px", fontWeight: 700, color: "#22d3ee", textDecoration: "none",
+                          }}>
+                            View Ad Strategy &rarr;
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
