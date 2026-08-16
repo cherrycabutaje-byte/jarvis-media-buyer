@@ -2,23 +2,23 @@ import type { PublicationCredential } from "@/lib/repositories/workerCredentialR
 
 /**
  * Mock publication provider (Publication Worker Lifecycle slice;
- * extended in Secure Publishing Credential Retrieval).
+ * extended in Secure Publishing Credential Retrieval and Real Meta
+ * Publishing Provider slices).
  *
  * Mirrors the existing mockImageProvider precedent exactly: lets
  * the full claim -> execute -> complete/fail lifecycle be genuinely
  * exercised end-to-end without ever touching credentials or calling
- * a real external platform. Per explicit scope, this slice does not
- * call Meta, Facebook, or Instagram - real platform integration is
- * a separate, future slice, exactly as image_generation's real
- * provider integration remains separately deferred today.
+ * a real external platform. Used now for Instagram and any platform
+ * other than Facebook - real platform integration for those remains
+ * a separate, future slice (Instagram publishing is explicitly
+ * blocked today by the missing media-storage architecture, per the
+ * Real Meta Publishing Provider slice's own STOP report).
  *
- * PublicationProviderInput now optionally carries the retrieved,
- * decrypted PublicationCredential - structurally ready for a real
- * provider adapter's execute() to use it (e.g. as an Authorization
- * header value in a real HTTP call). This mock provider's own logic
- * is unchanged - it still returns the same static success result
- * regardless - proving the wiring is correct without this slice
- * making any real platform call.
+ * PublicationProviderInput carries the retrieved, decrypted
+ * PublicationCredential and the asset's final publishable text -
+ * structurally identical to what metaFacebookProvider actually
+ * consumes, so this mock remains a faithful drop-in for any
+ * platform not yet real.
  */
 
 export interface PublicationProviderResult {
@@ -31,6 +31,7 @@ export interface PublicationProviderResult {
 export interface PublicationProviderInput {
   id: string
   platformId: string
+  text: string
   credential?: PublicationCredential
 }
 

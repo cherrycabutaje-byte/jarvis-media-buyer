@@ -1,6 +1,6 @@
-import { claimNextPublication, completePublication, failPublication } from "@/lib/repositories/workerPublicationRepository"
+import { claimNextPublication, completePublication, failPublication, getPublicationAssetText, getPublicationPlatformName } from "@/lib/repositories/workerPublicationRepository"
 import { getPublicationCredential } from "@/lib/repositories/workerCredentialRepository"
-import { mockPublicationProvider } from "@/lib/providers/mockPublicationProvider"
+import { resolvePublicationProvider } from "@/lib/providers/publicationProviderResolver"
 
 export interface PublicationWorkerRunResult {
   claimed: boolean
@@ -9,22 +9,27 @@ export interface PublicationWorkerRunResult {
 }
 
 /**
- * Runs one Publication Worker cycle: claim -> retrieve credential ->
- * execute (mock provider only, per explicit scope) -> complete or
+ * Runs one Publication Worker cycle: claim -> resolve platform name
+ * -> retrieve asset text -> retrieve credential -> resolve provider
+ * (real Facebook or mock, per platform) -> execute -> complete or
  * fail.
  *
+ * PROVIDER RESOLUTION (Real Meta Publishing Provider slice):
+ * resolvePublicationProvider() chooses metaFacebookProvider for
+ * "Facebook" and mockPublicationProvider for everything else
+ * (including "Instagram", which remains deferred). The Worker
+ * itself contains no raw Meta HTTP logic - that lives entirely
+ * inside metaFacebookProvider.
+ *
  * CREDENTIAL RETRIEVAL (Secure Publishing Credential Retrieval
- * slice): after claiming, before calling the provider, the decrypted
- * credential is retrieved via getPublicationCredential(). The
- * decrypted secret value itself is NEVER logged, NEVER included in
- * logLines, and NEVER returned in PublicationWorkerRunResult - only
- * the non-secret platformAccountId (already exposed to authenticated
- * users elsewhere via list_publishing_credentials) is logged, purely
- * to confirm retrieval succeeded. If no credential is configured for
- * the publication's workspace+platform (the common case today, since
- * no real credentials exist yet in this project), the publication is
- * failed cleanly via failPublication() with error_category
- * 'credential_error', and the provider is never called at all.
+ * slice, unchanged): the decrypted secret value itself is NEVER
+ * logged, NEVER included in logLines, and NEVER returned in
+ * PublicationWorkerRunResult - only the non-secret platformAccountId
+ * is logged, purely to confirm retrieval succeeded.
+ *
+ * ASSET TEXT: if asset_payload.rawText is missing/empty, the
+ * publication is failed cleanly with error_category 'content_error'
+ * before any credential retrieval or provider call occurs.
  *
  * Mirrors runWorkerOnce.ts's structure exactly - same logging
  * convention, same try/catch-then-failPublication safety net on an
@@ -57,8 +62,34 @@ export async function runPublicationWorkerOnce(): Promise<PublicationWorkerRunRe
   log(`[publication-worker] claimed publication ${publication.id} (asset: ${publication.asset_id}, platform: ${publication.platform_id})`)
 
   try {
-    const credentialResult = await getPublicationCredential(publication.id)
+    const platformNameResult = await getPublicationPlatformName(publication.platform_id)
+    if (platformNameResult.error || !platformNameResult.data) {
+      const errorMessage = platformNameResult.error ?? "Unable to resolve publishing platform."
+      log(`[publication-worker] platform resolution failed for publication ${publication.id}: ${errorMessage}`, true)
+      const failResult = await failPublication(publication.id, errorMessage, "platform_error")
+      if (failResult.error) {
+        log(`[publication-worker] failed to persist failure: ${failResult.error}`, true)
+      } else {
+        log(`[publication-worker] publication ${publication.id} failed - status: ${failResult.data?.status}`)
+      }
+      return { claimed: true, publicationId: publication.id, logLines }
+    }
+    const platformName = platformNameResult.data
 
+    const textResult = await getPublicationAssetText(publication.asset_id)
+    if (textResult.error || !textResult.data) {
+      const errorMessage = textResult.error ?? "No publishable text available."
+      log(`[publication-worker] asset text retrieval failed for publication ${publication.id}: ${errorMessage}`, true)
+      const failResult = await failPublication(publication.id, errorMessage, "content_error")
+      if (failResult.error) {
+        log(`[publication-worker] failed to persist failure: ${failResult.error}`, true)
+      } else {
+        log(`[publication-worker] publication ${publication.id} failed - status: ${failResult.data?.status}`)
+      }
+      return { claimed: true, publicationId: publication.id, logLines }
+    }
+
+    const credentialResult = await getPublicationCredential(publication.id)
     if (credentialResult.error || !credentialResult.data) {
       const errorMessage = credentialResult.error ?? "No publishing credential available."
       log(`[publication-worker] credential retrieval failed for publication ${publication.id}: ${errorMessage}`, true)
@@ -75,9 +106,13 @@ export async function runPublicationWorkerOnce(): Promise<PublicationWorkerRunRe
     // non-secret platformAccountId is safe to log here.
     log(`[publication-worker] credential retrieved for publication ${publication.id} (platform account: ${credentialResult.data.platformAccountId ?? "none"})`)
 
-    const result = await mockPublicationProvider.execute({
+    const provider = resolvePublicationProvider(platformName)
+    log(`[publication-worker] resolved provider: ${provider.providerName} for platform: ${platformName}`)
+
+    const result = await provider.execute({
       id: publication.id,
       platformId: publication.platform_id,
+      text: textResult.data,
       credential: credentialResult.data,
     })
 
