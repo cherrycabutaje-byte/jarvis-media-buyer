@@ -70,6 +70,15 @@ export default async function ProductCreativeLibraryPage({
         productId={product.id}
         initialAssets={assets}
       />
+
+      <div style={{ marginTop: "24px", textAlign: "center" }}>
+        <Link href={`/media-buyer/products/${product.id}/creative-plan`} style={{
+          display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 700, color: "#080b12",
+          background: "#22d3ee", padding: "10px 18px", borderRadius: "9px", textDecoration: "none",
+        }}>
+          Plan Creative
+        </Link>
+      </div>
     </div>
   );
 }
