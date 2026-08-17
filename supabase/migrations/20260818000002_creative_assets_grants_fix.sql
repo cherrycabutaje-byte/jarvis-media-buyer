@@ -1,0 +1,24 @@
+-- ============================================================
+-- JARVIS Platform Foundation
+-- Migration: 20260818000002_creative_assets_grants_fix
+-- Additive - grants only, no schema change.
+--
+-- Defect fix within the Media Asset Foundation slice. Local
+-- security testing proved creative_assets was completely
+-- inaccessible to `authenticated` - RLS policies alone do not
+-- substitute for the underlying table-level GRANT, exactly the
+-- same class of gap discovered and fixed during the Real Meta
+-- Publishing Provider slice for a different table. Confirmed via
+-- direct error message: "permission denied for table
+-- creative_assets... Grant the required privileges... GRANT
+-- SELECT, INSERT ON public.creative_assets TO authenticated."
+--
+-- This grants exactly SELECT/INSERT/DELETE to authenticated -
+-- matching the three RLS policies already defined in migration
+-- 20260818000001 (members_can_view, admins_can_create,
+-- admins_can_delete) - no UPDATE is granted, since no UPDATE
+-- policy exists (matching the frozen `assets` table's own
+-- convention of no direct row mutation).
+-- ============================================================
+
+grant select, insert, delete on public.creative_assets to authenticated;

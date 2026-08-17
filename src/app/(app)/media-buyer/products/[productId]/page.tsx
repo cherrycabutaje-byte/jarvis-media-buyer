@@ -109,6 +109,7 @@ export default async function ProductIntelligencePage({
       <ProductIntelligenceClient
         intelligence={intelligence}
         productLabel={productLabel}
+        productId={product.id}
       />
     </div>
   );

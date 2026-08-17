@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 
 interface ModuleResult<T> {
   status: string;
@@ -88,9 +89,11 @@ function Tag({ children }: { children: React.ReactNode }) {
 export default function ProductIntelligenceClient({
   intelligence,
   productLabel,
+  productId,
 }: {
   intelligence: IntelligenceData;
   productLabel: string;
+  productId: string;
 }) {
   const [objective, setObjective] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -141,7 +144,7 @@ export default function ProductIntelligenceClient({
         <p style={{ fontSize: "15px", color: "#e2e8f0", fontWeight: 600, margin: "0 0 10px" }}>{audienceIntelligence.findings.primaryPersona}</p>
         <p style={{ fontSize: "13px", color: "#94a3b8", margin: "0 0 12px", lineHeight: 1.6 }}>
           Primary emotion: <strong style={{ color: "#cbd5e1" }}>{audienceIntelligence.findings.primaryEmotion}</strong>
-          {" Ãƒâ€šÃ‚Â· "}Awareness level: <strong style={{ color: "#cbd5e1" }}>{audienceIntelligence.findings.awarenessLevel.replace("-", " ")}</strong>
+          {" · "}Awareness level: <strong style={{ color: "#cbd5e1" }}>{audienceIntelligence.findings.awarenessLevel.replace("-", " ")}</strong>
         </p>
         <ConfidenceBadge status={audienceIntelligence.status} confidence={audienceIntelligence.confidence} />
       </Section>
@@ -195,13 +198,13 @@ export default function ProductIntelligenceClient({
       )}
 
       <div style={{ marginTop: "24px", textAlign: "center" }}>
-        <p style={{ fontSize: "12px", color: "#475569", marginBottom: "12px" }}>Creative Studio is coming next.</p>
-        <span style={{
-          display: "inline-block", fontSize: "13px", fontWeight: 700, color: "#475569", background: "#1e293b",
-          padding: "10px 18px", borderRadius: "9px",
+        <p style={{ fontSize: "12px", color: "#64748b", marginBottom: "12px" }}>See what JARVIS already has to work with.</p>
+        <Link href={`/media-buyer/products/${productId}/creative-library`} style={{
+          display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 700, color: "#080b12",
+          background: "#22d3ee", padding: "10px 18px", borderRadius: "9px", textDecoration: "none",
         }}>
-          Create Creative &mdash; Coming soon
-        </span>
+          View Creative Assets
+        </Link>
       </div>
     </div>
   );

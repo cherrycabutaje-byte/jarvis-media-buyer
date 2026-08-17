@@ -154,6 +154,7 @@ export default async function MediaBuyerHomePage() {
       {/* Coming soon: creatives / publishing / performance */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px", marginTop: "24px" }}>
         {[
+          { title: "Creative Library", desc: "Product images, logos, and videos JARVIS can reuse.", href: "/media-buyer/creative-library" },
           { title: "Review creatives", desc: "Approve and prepare your ads for publishing.", href: "/assets/review" },
           { title: "Mark ready to publish", desc: "Confirm approved creatives are ready to go live.", href: "/assets/ready" },
           { title: "Performance", desc: "See how your published ads are doing.", href: null },
