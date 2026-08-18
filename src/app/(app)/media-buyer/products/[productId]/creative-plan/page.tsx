@@ -10,6 +10,7 @@ import {
   type CreativeAssetEvidence,
   type HybridDecisionResult,
 } from "@/lib/hybrid/hybridCreativeDecisionEngine";
+import ProduceCreativeButton from "@/components/ProduceCreativeButton";
 
 const PRODUCT_TYPE_LABELS: Record<string, string> = {
   "static-advertisement": "Static ad",
@@ -214,15 +215,21 @@ export default async function CreativePlanPage({
         <span style={{ fontSize: "13px", fontWeight: 800, color: costInfo.color }}>{costInfo.label}</span>
       </div>
 
-      <div style={{ marginTop: "24px", textAlign: "center" }}>
-        <p style={{ fontSize: "12px", color: "#64748b", marginBottom: "12px" }}>Creative production is the next step.</p>
-        <span style={{
-          display: "inline-block", fontSize: "13px", fontWeight: 700, color: "#475569", background: "#1e293b",
-          padding: "10px 18px", borderRadius: "9px",
-        }}>
-          Produce Creative &mdash; Coming soon
-        </span>
-      </div>
+      {(decision.decision === "REUSE" || decision.decision === "REDESIGN" || decision.decision === "REMIX") ? (
+        <ProduceCreativeButton productId={product.id} />
+      ) : (
+        <div style={{ marginTop: "24px", textAlign: "center" }}>
+          <p style={{ fontSize: "12px", color: "#64748b", marginBottom: "12px" }}>
+            Creative production for this method isn&apos;t available yet.
+          </p>
+          <span style={{
+            display: "inline-block", fontSize: "13px", fontWeight: 700, color: "#475569", background: "#1e293b",
+            padding: "10px 18px", borderRadius: "9px",
+          }}>
+            Produce Creative &mdash; Coming soon
+          </span>
+        </div>
+      )}
     </div>
   );
 }
