@@ -11,6 +11,10 @@ import {
   type HybridDecisionResult,
 } from "@/lib/hybrid/hybridCreativeDecisionEngine";
 import ProduceCreativeButton from "@/components/ProduceCreativeButton";
+import { getFirstAssetForProduct } from "@/lib/repositories/assetRepository";
+import { buildStaticCreativeSpec } from "@/lib/production/staticCreativeProducer";
+import { buildProductTruthProfile } from "@/lib/product/productTruth";
+import { runCreativePreflight, type PreflightResult } from "@/lib/product/creativePreflight";
 
 const PRODUCT_TYPE_LABELS: Record<string, string> = {
   "static-advertisement": "Static ad",
@@ -150,6 +154,42 @@ export default async function CreativePlanPage({
   });
 
   const selectedAssets = evidence.filter((a) => decision.selectedAssetIds.includes(a.id));
+  const existingAssetResult = await getFirstAssetForProduct(product.id);
+  const existingAdCopy =
+    existingAssetResult.data && typeof existingAssetResult.data.asset_payload?.rawText === "string"
+      ? (existingAssetResult.data.asset_payload.rawText as string)
+      : null;
+  const productImageForSpec = selectedAssets.find((a) => a.category === "product_image" || a.category === "previous_creative");
+  const logoForSpec = selectedAssets.find((a) => a.category === "brand_asset");
+  const spec = buildStaticCreativeSpec({
+    hybridDecision: decision,
+    creativeAngle: pipeline.creativeStrategy.findings.creativeAngle,
+    existingAdCopy,
+    productImageAssetId: productImageForSpec?.id ?? null,
+    logoAssetId: logoForSpec?.id ?? null,
+  });
+  const fullPipeline = brainRunResult.data.intelligence_pipeline as unknown as {
+    business?: { findings: { keyDifferentiators: string[] } };
+    offer?: { findings: { offerFrame: string } };
+    audience?: { findings: { primaryPersona: string } };
+  };
+  const truthProfile = buildProductTruthProfile({
+    brandName: brand?.name ?? "",
+    businessInput: brainRunResult.data.business_input as { productName?: string; productDescription?: string },
+    businessProductType: product.business_product_type,
+    price: product.price,
+    productUrl: product.product_url,
+    businessIntelligence: fullPipeline.business?.findings ?? null,
+    offerIntelligence: fullPipeline.offer?.findings ?? null,
+    audienceIntelligence: fullPipeline.audience?.findings ?? null,
+    mediaAssets: rawAssets.map((a) => ({ category: a.category })),
+  });
+  const preflight: PreflightResult = runCreativePreflight({
+    productTruth: truthProfile,
+    hybridDecision: decision,
+    spec,
+    selectedAssetsBelongToProduct: selectedAssets.every((a) => a.productId === product.id || (a.brandId === product.brand_id && a.category === "brand_asset")),
+  });
   const costInfo = COST_LABELS[decision.relativeCost] ?? { label: decision.relativeCost, color: "#94a3b8" };
 
   return (
@@ -213,6 +253,23 @@ export default async function CreativePlanPage({
       }}>
         <span style={{ fontSize: "13px", fontWeight: 700, color: "#94a3b8" }}>Estimated relative production cost</span>
         <span style={{ fontSize: "13px", fontWeight: 800, color: costInfo.color }}>{costInfo.label}</span>
+      </div>
+
+      <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "16px", padding: "22px", marginBottom: "16px" }}>
+        <h3 style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 12px" }}>
+          Creative Preflight &mdash; {preflight.status.replace(/_/g, " ")}
+        </h3>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          {preflight.checks.map((c, i) => (
+            <div key={i} style={{ display: "flex", gap: "8px", alignItems: "flex-start", fontSize: "12px" }}>
+              <span style={{ color: c.passed ? "#4ade80" : "#f87171", fontWeight: 700, flexShrink: 0 }}>{c.passed ? "\u2713" : "\u2717"}</span>
+              <span style={{ color: "#94a3b8" }}>{c.label}: {c.detail}</span>
+            </div>
+          ))}
+        </div>
+        {preflight.generationJustification && (
+          <p style={{ fontSize: "12px", color: "#facc15", marginTop: "12px", marginBottom: 0 }}>{preflight.generationJustification}</p>
+        )}
       </div>
 
       {(decision.decision === "REUSE" || decision.decision === "REDESIGN" || decision.decision === "REMIX") ? (

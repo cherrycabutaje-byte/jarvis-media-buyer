@@ -95,6 +95,17 @@ export interface CreativeAssetEvidence {
   workspaceId: string
   originalFilename: string | null
   createdAt: string
+  /**
+   * Product Truth + Master Product Asset V1 slice addition -
+   * optional, backward-compatible. When present and true on a
+   * candidate, it is preferred over other equally-valid raw-match
+   * candidates (Step 8's "Hybrid decisions... should prefer it"
+   * requirement) - this is the ONLY behavioral change; every
+   * existing decision category, filter, and rule is untouched, and
+   * every prior test (which never sets this field) continues to
+   * produce identical results since the fallback is unchanged.
+   */
+  isMaster?: boolean
 }
 
 export interface HybridDecisionContext {
@@ -242,7 +253,7 @@ export function decideCreativeProductionMethod(
   )
 
   if (rawMatch.length > 0) {
-    const chosen = rawMatch[0]
+    const chosen = rawMatch.find((a) => a.isMaster) ?? rawMatch[0]
     evidence.push(
       `Found ${rawMatch.length} existing ${requiredFormat} asset(s) tagged for this exact product, with no prior campaign messaging embedded (source: ${chosen.sourceType}).`
     )

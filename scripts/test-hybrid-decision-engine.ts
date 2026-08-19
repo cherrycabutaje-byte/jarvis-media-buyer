@@ -167,6 +167,15 @@ console.log("\n=== EXTRA: Upstream partial-confidence capping ===")
   assert(result.confidence <= 0.6, `confidence capped due to upstream uncertainty (got ${result.confidence})`)
 }
 
+console.log("\n=== CASE M (new): Master asset preferred among multiple raw matches ===")
+{
+  const olderNonMaster = asset({ createdAt: "2020-01-01T00:00:00.000Z" })
+  const newerMaster = asset({ isMaster: true, createdAt: "2020-01-02T00:00:00.000Z" })
+  const result = decideCreativeProductionMethod(imageRequirement, [olderNonMaster, newerMaster], context)
+  assert(result.decision === "REUSE", `decision is REUSE (got ${result.decision})`)
+  assert(result.selectedAssetIds[0] === newerMaster.id, "the master asset is selected, not merely the most recent")
+}
+
 console.log(`\n=== RESULTS: ${passed} passed, ${failed} failed ===`)
 if (failed > 0) {
   process.exit(1)

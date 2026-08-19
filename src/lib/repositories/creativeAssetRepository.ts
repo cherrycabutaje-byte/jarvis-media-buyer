@@ -1,6 +1,14 @@
 import { createClient } from "@/lib/supabase/server"
 
-export type CreativeAssetCategory = "product_image" | "video" | "brand_asset" | "testimonial" | "previous_creative"
+export type CreativeAssetCategory =
+  | "product_image"
+  | "video"
+  | "brand_asset"
+  | "testimonial"
+  | "previous_creative"
+  | "product_in_use"
+  | "packaging"
+  | "screenshot"
 export type CreativeAssetSource = "customer_upload" | "previous_creative"
 
 export interface CreativeAsset {
@@ -19,6 +27,7 @@ export interface CreativeAsset {
   duration_seconds: number | null
   uploaded_by: string
   created_at: string
+  is_master: boolean
 }
 
 export interface RepositoryResult<T> {
@@ -27,7 +36,7 @@ export interface RepositoryResult<T> {
 }
 
 /**
- * Media Asset Foundation + Creative Library V1 slice.
+ * Media Asset Foundation V1 slice.
  *
  * creative_assets is entirely separate from the frozen `assets`
  * table (publication pipeline) - see migration
@@ -46,7 +55,7 @@ export interface RepositoryResult<T> {
  */
 
 const CREATIVE_ASSET_COLUMNS =
-  "id, workspace_id, brand_id, product_id, category, source_type, storage_path, original_filename, mime_type, file_size_bytes, width_px, height_px, duration_seconds, uploaded_by, created_at"
+  "id, workspace_id, brand_id, product_id, category, source_type, storage_path, original_filename, mime_type, file_size_bytes, width_px, height_px, duration_seconds, uploaded_by, created_at, is_master"
 
 export async function getCreativeAssetsForWorkspace(
   workspaceId: string,
@@ -133,6 +142,41 @@ export async function deleteCreativeAsset(id: string): Promise<RepositoryResult<
 
   if (error) {
     return { data: null, error: error.message }
+  }
+  return { data: null, error: null }
+}
+
+/**
+ * Product Truth + Master Product Asset V1 slice addition.
+ *
+ * Sets is_master = true on the target asset and false on every
+ * other asset for the same product - exactly one master per
+ * product at a time. Never touches storage_path, mime_type, or any
+ * other field - the original file is never modified, copied, or
+ * overwritten (Step 14's explicit preservation requirement). Two
+ * plain RLS-protected updates (not a single atomic RPC) - acceptable
+ * here since a transient moment with zero or two masters during a
+ * race is a display-only inconsistency, not a security or data-loss
+ * concern, unlike the version-number uniqueness the Creative
+ * Production Engine's RPC protects.
+ */
+export async function setMasterAsset(productId: string, assetId: string): Promise<RepositoryResult<null>> {
+  const supabase = await createClient()
+
+  const { error: clearError } = await supabase
+    .from("creative_assets")
+    .update({ is_master: false })
+    .eq("product_id", productId)
+    .eq("is_master", true)
+
+  if (clearError) {
+    return { data: null, error: clearError.message }
+  }
+
+  const { error: setError } = await supabase.from("creative_assets").update({ is_master: true }).eq("id", assetId)
+
+  if (setError) {
+    return { data: null, error: setError.message }
   }
   return { data: null, error: null }
 }

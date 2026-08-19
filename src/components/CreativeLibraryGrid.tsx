@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { deleteCreativeAssetAction } from "@/lib/actions/creativeAssetActions";
+import { setMasterAssetAction } from "@/lib/actions/masterAssetActions";
 import type { CreativeAsset } from "@/lib/repositories/creativeAssetRepository";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -10,7 +11,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   brand_asset: "Logo / brand asset",
   testimonial: "Testimonial",
   previous_creative: "Previous creative",
+  product_in_use: "Product in use",
+  packaging: "Packaging",
+  screenshot: "Screenshot",
 };
+
+const MASTER_ELIGIBLE_CATEGORIES = ["product_image", "product_in_use"];
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -19,16 +25,11 @@ function formatFileSize(bytes: number): string {
 
 export default function CreativeLibraryGrid({
   initialAssets,
+  productId,
 }: {
   initialAssets: CreativeAsset[];
+  productId?: string | null;
 }) {
-  // React's own documented pattern for "adjusting state when a prop
-  // changes" - setState called directly during render (not inside
-  // useEffect) so React can bail out and re-render immediately
-  // without committing the stale in-between state. This avoids the
-  // cascading-render anti-pattern of syncing props into state via
-  // an effect, while still allowing local optimistic mutation
-  // (instant removal on delete) independent of the prop afterward.
   const [prevInitialAssets, setPrevInitialAssets] = useState(initialAssets);
   const [assets, setAssets] = useState(initialAssets);
   if (initialAssets !== prevInitialAssets) {
@@ -38,6 +39,7 @@ export default function CreativeLibraryGrid({
 
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [settingMasterId, setSettingMasterId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +80,16 @@ export default function CreativeLibraryGrid({
     setDeletingId(null);
   }
 
+  async function handleSetMaster(assetId: string) {
+    if (!productId) return;
+    setSettingMasterId(assetId);
+    const result = await setMasterAssetAction(productId, assetId);
+    if (result.success) {
+      setAssets((prev) => prev.map((a) => ({ ...a, is_master: a.id === assetId })));
+    }
+    setSettingMasterId(null);
+  }
+
   if (assets.length === 0) {
     return (
       <div style={{
@@ -96,11 +108,20 @@ export default function CreativeLibraryGrid({
       {assets.map((asset) => {
         const previewUrl = previewUrls[asset.id];
         const isVideo = asset.mime_type.startsWith("video/");
+        const canBeMaster = productId && MASTER_ELIGIBLE_CATEGORIES.includes(asset.category);
         return (
           <div key={asset.id} style={{
-            background: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px", overflow: "hidden",
+            background: "#0f172a", border: asset.is_master ? "1px solid #22d3ee" : "1px solid #1e293b", borderRadius: "12px", overflow: "hidden",
           }}>
-            <div style={{ aspectRatio: "1", background: "#080b12", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ aspectRatio: "1", background: "#080b12", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+              {asset.is_master && (
+                <span style={{
+                  position: "absolute", top: "8px", left: "8px", fontSize: "10px", fontWeight: 800, color: "#080b12",
+                  background: "#22d3ee", padding: "3px 8px", borderRadius: "999px", letterSpacing: "0.04em", zIndex: 1,
+                }}>
+                  MASTER
+                </span>
+              )}
               {previewUrl ? (
                 isVideo ? (
                   <video src={previewUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted />
@@ -121,16 +142,30 @@ export default function CreativeLibraryGrid({
                 {asset.width_px && asset.height_px ? ` · ${asset.width_px}\u00d7${asset.height_px}` : ""}
                 {asset.duration_seconds ? ` · ${Math.round(asset.duration_seconds)}s` : ""}
               </p>
-              <button
-                onClick={() => handleDelete(asset.id, asset.storage_path)}
-                disabled={deletingId === asset.id}
-                style={{
-                  fontSize: "11px", fontWeight: 600, color: "#f87171", background: "transparent", border: "none",
-                  cursor: deletingId === asset.id ? "default" : "pointer", padding: 0, fontFamily: "inherit",
-                }}
-              >
-                {deletingId === asset.id ? "Removing..." : "Remove"}
-              </button>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                {canBeMaster && !asset.is_master && (
+                  <button
+                    onClick={() => handleSetMaster(asset.id)}
+                    disabled={settingMasterId === asset.id}
+                    style={{
+                      fontSize: "11px", fontWeight: 600, color: "#22d3ee", background: "transparent", border: "none",
+                      cursor: settingMasterId === asset.id ? "default" : "pointer", padding: 0, fontFamily: "inherit",
+                    }}
+                  >
+                    {settingMasterId === asset.id ? "Setting..." : "Set as master"}
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDelete(asset.id, asset.storage_path)}
+                  disabled={deletingId === asset.id}
+                  style={{
+                    fontSize: "11px", fontWeight: 600, color: "#f87171", background: "transparent", border: "none",
+                    cursor: deletingId === asset.id ? "default" : "pointer", padding: 0, fontFamily: "inherit",
+                  }}
+                >
+                  {deletingId === asset.id ? "Removing..." : "Remove"}
+                </button>
+              </div>
             </div>
           </div>
         );

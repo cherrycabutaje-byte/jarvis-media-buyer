@@ -3,16 +3,36 @@ import { useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { createCreativeAssetAction } from "@/lib/actions/creativeAssetActions";
 import type { CreativeAssetCategory } from "@/lib/repositories/creativeAssetRepository";
+import type { BusinessProductType } from "@/lib/product/productTruth";
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB, matches the storage bucket's own limit
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
-const CATEGORY_OPTIONS: { value: CreativeAssetCategory; label: string; accept: string }[] = [
-  { value: "product_image", label: "Product image", accept: "image/jpeg,image/png,image/webp,image/gif" },
+const ALL_CATEGORY_OPTIONS: { value: CreativeAssetCategory; label: string; accept: string }[] = [
+  { value: "product_image", label: "Product photo", accept: "image/jpeg,image/png,image/webp,image/gif" },
+  { value: "product_in_use", label: "Product in use", accept: "image/jpeg,image/png,image/webp,image/gif" },
+  { value: "packaging", label: "Packaging", accept: "image/jpeg,image/png,image/webp,image/gif" },
   { value: "brand_asset", label: "Logo / brand asset", accept: "image/jpeg,image/png,image/webp,image/gif,image/svg+xml" },
+  { value: "screenshot", label: "Screenshot", accept: "image/jpeg,image/png,image/webp,image/gif" },
   { value: "video", label: "Product video", accept: "video/mp4,video/quicktime,video/webm" },
   { value: "testimonial", label: "Testimonial", accept: "image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" },
   { value: "previous_creative", label: "Previous creative", accept: "image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" },
 ];
+
+const GUIDANCE_BY_TYPE: Record<BusinessProductType | "UNKNOWN", string> = {
+  PHYSICAL_PRODUCT: "Add clear photos of your real product. JARVIS will preserve the actual product whenever possible instead of recreating it with AI.",
+  SERVICE: "Add real photos of your business, location, team, or work - whatever best represents your service.",
+  SAAS_APP: "Add screenshots or interface visuals JARVIS can use in your ads.",
+  DIGITAL_PRODUCT: "Add a cover image, screenshots, or previews of what customers will receive.",
+  UNKNOWN: "Add a clear product photo, logo, or video to get started.",
+};
+
+const PRIORITY_CATEGORIES_BY_TYPE: Record<BusinessProductType | "UNKNOWN", CreativeAssetCategory[]> = {
+  PHYSICAL_PRODUCT: ["product_image", "product_in_use", "packaging", "brand_asset", "video", "testimonial", "previous_creative", "screenshot"],
+  SERVICE: ["brand_asset", "product_in_use", "testimonial", "video", "product_image", "previous_creative", "packaging", "screenshot"],
+  SAAS_APP: ["screenshot", "brand_asset", "video", "testimonial", "previous_creative", "product_image", "product_in_use", "packaging"],
+  DIGITAL_PRODUCT: ["screenshot", "brand_asset", "product_image", "testimonial", "previous_creative", "video", "product_in_use", "packaging"],
+  UNKNOWN: ["product_image", "brand_asset", "video", "screenshot", "product_in_use", "packaging", "testimonial", "previous_creative"],
+};
 
 function sanitizeFilename(name: string): string {
   const lastDot = name.lastIndexOf(".");
@@ -67,19 +87,26 @@ export default function CreativeAssetUploader({
   workspaceId,
   brandId,
   productId,
+  businessProductType,
   onUploaded,
 }: {
   workspaceId: string;
   brandId: string | null;
   productId: string | null;
+  businessProductType?: BusinessProductType | null;
   onUploaded: () => void;
 }) {
-  const [category, setCategory] = useState<CreativeAssetCategory>("product_image");
+  const typeKey = businessProductType ?? "UNKNOWN";
+  const orderedCategories = PRIORITY_CATEGORIES_BY_TYPE[typeKey].map(
+    (val) => ALL_CATEGORY_OPTIONS.find((o) => o.value === val)!
+  );
+
+  const [category, setCategory] = useState<CreativeAssetCategory>(orderedCategories[0].value);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const activeOption = CATEGORY_OPTIONS.find((o) => o.value === category)!;
+  const activeOption = ALL_CATEGORY_OPTIONS.find((o) => o.value === category)!;
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -143,8 +170,6 @@ export default function CreativeAssetUploader({
       });
 
       if (!result.success) {
-        // Roll back the storage upload if metadata persistence failed,
-        // so we never leave an orphaned file with no DB record.
         await supabase.storage.from("creative-library").remove([storagePath]);
         setError(result.error ?? "Something went wrong saving this asset.");
         setUploading(false);
@@ -164,10 +189,13 @@ export default function CreativeAssetUploader({
 
   return (
     <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "14px", padding: "20px" }}>
-      <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#f1f5f9", margin: "0 0 14px" }}>Add to your Creative Library</h3>
+      <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#f1f5f9", margin: "0 0 6px" }}>Add to your Creative Library</h3>
+      <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 14px", lineHeight: 1.5 }}>
+        {GUIDANCE_BY_TYPE[typeKey]}
+      </p>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
-        {CATEGORY_OPTIONS.map((opt) => (
+        {orderedCategories.map((opt) => (
           <button
             key={opt.value}
             onClick={() => setCategory(opt.value)}

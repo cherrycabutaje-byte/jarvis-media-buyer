@@ -109,6 +109,7 @@ export async function produceCreativeAction(productId: string): Promise<ProduceC
     workspaceId: a.workspace_id,
     originalFilename: a.original_filename,
     createdAt: a.created_at,
+    isMaster: a.is_master,
   }))
 
   const hybridDecision = decideCreativeProductionMethod(requirement, evidence, {
