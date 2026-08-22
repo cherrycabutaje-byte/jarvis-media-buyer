@@ -9,7 +9,7 @@ export type CreativeAssetCategory =
   | "product_in_use"
   | "packaging"
   | "screenshot"
-export type CreativeAssetSource = "customer_upload" | "previous_creative"
+export type CreativeAssetSource = "customer_upload" | "previous_creative" | "jarvis_processed"
 
 export interface CreativeAsset {
   id: string
@@ -28,6 +28,8 @@ export interface CreativeAsset {
   uploaded_by: string
   created_at: string
   is_master: boolean
+  derived_from_asset_id: string | null
+  processing_metadata: Record<string, unknown> | null
 }
 
 export interface RepositoryResult<T> {
@@ -53,9 +55,8 @@ export interface RepositoryResult<T> {
  * correct workspace-scoped authorization for these simple,
  * single-table operations.
  */
-
 const CREATIVE_ASSET_COLUMNS =
-  "id, workspace_id, brand_id, product_id, category, source_type, storage_path, original_filename, mime_type, file_size_bytes, width_px, height_px, duration_seconds, uploaded_by, created_at, is_master"
+  "id, workspace_id, brand_id, product_id, category, source_type, storage_path, original_filename, mime_type, file_size_bytes, width_px, height_px, duration_seconds, uploaded_by, created_at, is_master, derived_from_asset_id, processing_metadata"
 
 export async function getCreativeAssetsForWorkspace(
   workspaceId: string,
@@ -179,4 +180,79 @@ export async function setMasterAsset(productId: string, assetId: string): Promis
     return { data: null, error: setError.message }
   }
   return { data: null, error: null }
+}
+
+/**
+ * Image Improvement Engine V1 slice addition.
+ *
+ * Creates a new creative_assets row representing a deterministic
+ * derivative of an existing asset. Never overwrites, mutates, or
+ * deletes the original row - the original customer upload always
+ * remains fully intact and independently accessible. source_type is
+ * always "jarvis_processed" so a derivative is never confused with
+ * a genuine customer upload. derived_from_asset_id and
+ * processing_metadata provide honest lineage.
+ */
+export async function createDerivedCreativeAsset(params: {
+  workspaceId: string
+  brandId: string | null
+  productId: string | null
+  category: CreativeAssetCategory
+  storagePath: string
+  mimeType: string
+  fileSizeBytes: number
+  widthPx: number | null
+  heightPx: number | null
+  uploadedBy: string
+  derivedFromAssetId: string
+  processingMetadata: Record<string, unknown>
+}): Promise<RepositoryResult<CreativeAsset>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("creative_assets")
+    .insert({
+      workspace_id: params.workspaceId,
+      brand_id: params.brandId,
+      product_id: params.productId,
+      category: params.category,
+      source_type: "jarvis_processed",
+      storage_path: params.storagePath,
+      original_filename: null,
+      mime_type: params.mimeType,
+      file_size_bytes: params.fileSizeBytes,
+      width_px: params.widthPx,
+      height_px: params.heightPx,
+      duration_seconds: null,
+      uploaded_by: params.uploadedBy,
+      derived_from_asset_id: params.derivedFromAssetId,
+      processing_metadata: params.processingMetadata,
+    })
+    .select(CREATIVE_ASSET_COLUMNS)
+    .single()
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+  return { data: data as CreativeAsset, error: null }
+}
+
+/**
+ * Checks whether a deterministic derivative already exists for a
+ * given source asset, so JARVIS never repeats the same processing
+ * work twice.
+ */
+export async function getExistingDerivedAsset(sourceAssetId: string): Promise<RepositoryResult<CreativeAsset | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("creative_assets")
+    .select(CREATIVE_ASSET_COLUMNS)
+    .eq("derived_from_asset_id", sourceAssetId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+  return { data: (data as CreativeAsset | null) ?? null, error: null }
 }
