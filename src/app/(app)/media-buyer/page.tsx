@@ -112,12 +112,20 @@ export default async function MediaBuyerHomePage() {
             <div key={brand.id} style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "16px", padding: "22px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#f1f5f9", margin: 0 }}>{brand.name}</h3>
-                <Link href="/products/new" style={{
-                  fontSize: "12px", fontWeight: 700, color: "#22d3ee", textDecoration: "none",
-                  border: "1px solid #1e293b", padding: "6px 12px", borderRadius: "8px",
-                }}>
-                  + Add a product
-                </Link>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <Link href={`/media-buyer/brands/${brand.id}/settings`} style={{
+                    fontSize: "12px", fontWeight: 700, color: "#94a3b8", textDecoration: "none",
+                    border: "1px solid #1e293b", padding: "6px 12px", borderRadius: "8px",
+                  }}>
+                    Advertising Goals & Budget
+                  </Link>
+                  <Link href="/products/new" style={{
+                    fontSize: "12px", fontWeight: 700, color: "#22d3ee", textDecoration: "none",
+                    border: "1px solid #1e293b", padding: "6px 12px", borderRadius: "8px",
+                  }}>
+                    + Add a product
+                  </Link>
+                </div>
               </div>
 
               {products.length === 0 ? (
