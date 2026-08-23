@@ -256,3 +256,37 @@ export async function getExistingDerivedAsset(sourceAssetId: string): Promise<Re
   }
   return { data: (data as CreativeAsset | null) ?? null, error: null }
 }
+
+/**
+ * AI Image Improvement Engine V1 slice addition.
+ *
+ * Checks whether a derivative already exists for a source asset
+ * that used a SPECIFIC operation (e.g. "BACKGROUND_REMOVAL") -
+ * genuinely distinct from getExistingDerivedAsset() above, which
+ * would incorrectly match an unrelated DETERMINISTIC_IMPROVEMENT
+ * derivative (a resize) when checking idempotency for a paid AI
+ * operation. Idempotency for paid AI calls must be scoped to the
+ * exact operation, not merely "any derivative exists" - this is the
+ * critical cost-control check required before ever calling a paid
+ * provider (Step 7/12 of the AI Image Improvement directive).
+ */
+export async function getExistingDerivedAssetByOperation(
+  sourceAssetId: string,
+  operation: string
+): Promise<RepositoryResult<CreativeAsset | null>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("creative_assets")
+    .select(CREATIVE_ASSET_COLUMNS)
+    .eq("derived_from_asset_id", sourceAssetId)
+    .eq("source_type", "jarvis_processed")
+    .contains("processing_metadata", { operation })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+  return { data: (data as CreativeAsset | null) ?? null, error: null }
+}

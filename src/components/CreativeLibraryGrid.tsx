@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { deleteCreativeAssetAction } from "@/lib/actions/creativeAssetActions";
 import { setMasterAssetAction } from "@/lib/actions/masterAssetActions";
 import { prepareProductImageAction } from "@/lib/actions/imageImprovementActions";
+import { improveImageWithAIAction } from "@/lib/actions/aiImageImprovementActions";
 import type { CreativeAsset } from "@/lib/repositories/creativeAssetRepository";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -50,6 +51,8 @@ export default function CreativeLibraryGrid({
   const [settingMasterId, setSettingMasterId] = useState<string | null>(null);
   const [preparingId, setPreparingId] = useState<string | null>(null);
   const [prepareResults, setPrepareResults] = useState<Record<string, string>>({});
+  const [aiImprovingId, setAiImprovingId] = useState<string | null>(null);
+  const [aiResults, setAiResults] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -113,6 +116,26 @@ export default function CreativeLibraryGrid({
     }
     setPreparingId(null);
   }
+
+  async function handleAiImprove(assetId: string) {
+    setAiImprovingId(assetId);
+    const result = await improveImageWithAIAction(assetId);
+    if (result.success) {
+      setAiResults((prev) => ({
+        ...prev,
+        [assetId]: result.reused
+          ? "Background removed (already prepared earlier - reused, not reprocessed)"
+          : "Background removed. Original preserved.",
+      }));
+      if (result.setAsMaster) {
+        setAssets((prev) => prev.map((a) => ({ ...a, is_master: false })));
+      }
+    } else {
+      setAiResults((prev) => ({ ...prev, [assetId]: result.error ?? "Something went wrong." }));
+    }
+    setAiImprovingId(null);
+  }
+
 
   if (assets.length === 0) {
     return (
@@ -180,7 +203,29 @@ export default function CreativeLibraryGrid({
                   {prepareResults[asset.id]}
                 </p>
               )}
+              {aiResults[asset.id] && (
+                <p style={{ fontSize: "11px", color: "#94a3b8", margin: "0 0 8px", lineHeight: 1.4 }}>
+                  {aiResults[asset.id]}
+                </p>
+              )}
+              {aiResults[asset.id] && (
+                <p style={{ fontSize: "11px", color: "#94a3b8", margin: "0 0 8px", lineHeight: 1.4 }}>
+                  {aiResults[asset.id]}
+                </p>
+              )}
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {canPrepare && !asset.is_master && (
+                  <button
+                    onClick={() => handleAiImprove(asset.id)}
+                    disabled={aiImprovingId === asset.id}
+                    style={{
+                      fontSize: "11px", fontWeight: 600, color: "#a78bfa", background: "transparent", border: "none",
+                      cursor: aiImprovingId === asset.id ? "default" : "pointer", padding: 0, fontFamily: "inherit", textAlign: "left",
+                    }}
+                  >
+                    {aiImprovingId === asset.id ? "Improving..." : "Remove background (advanced)"}
+                  </button>
+                )}
                 {canPrepare && (
                   <button
                     onClick={() => handlePrepare(asset.id)}
