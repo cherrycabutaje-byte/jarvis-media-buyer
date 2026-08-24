@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getBrandById } from "@/lib/repositories/brandRepository";
 import { getWorkspacesForUser } from "@/lib/repositories/workspaceRepository";
 import OwnerGuardrailsSettings from "@/components/OwnerGuardrailsSettings";
+import MetaAdAccountConnection from "@/components/MetaAdAccountConnection";
+import { getMetaAdAccountLinkForBrand } from "@/lib/repositories/metaAdAccountRepository";
 
 export default async function BrandAdvertisingGoalsPage({
   params,
@@ -67,6 +69,22 @@ export default async function BrandAdvertisingGoalsPage({
           authorityMode: brand.authority_mode,
         }}
       />
+
+      <MetaAdAccountConnectionSection brandId={brand.id} />
     </div>
+  );
+}
+
+async function MetaAdAccountConnectionSection({ brandId }: { brandId: string }) {
+  const linkResult = await getMetaAdAccountLinkForBrand(brandId);
+  const link = linkResult.data;
+  return (
+    <MetaAdAccountConnection
+      brandId={brandId}
+      connected={!!link && link.status === "connected"}
+      metaAdAccountId={link?.meta_ad_account_id ?? null}
+      status={link?.status ?? null}
+      lastSyncedAt={link?.last_synced_at ?? null}
+    />
   );
 }
