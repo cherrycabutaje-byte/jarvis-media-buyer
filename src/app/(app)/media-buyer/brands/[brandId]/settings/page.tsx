@@ -4,6 +4,7 @@ import { getBrandById } from "@/lib/repositories/brandRepository";
 import { getWorkspacesForUser } from "@/lib/repositories/workspaceRepository";
 import OwnerGuardrailsSettings from "@/components/OwnerGuardrailsSettings";
 import MetaAdAccountConnection from "@/components/MetaAdAccountConnection";
+import MetaAdsSyncSection from "@/components/MetaAdsSyncSection";
 import { getMetaAdAccountLinkForBrand } from "@/lib/repositories/metaAdAccountRepository";
 
 export default async function BrandAdvertisingGoalsPage({
@@ -79,12 +80,15 @@ async function MetaAdAccountConnectionSection({ brandId }: { brandId: string }) 
   const linkResult = await getMetaAdAccountLinkForBrand(brandId);
   const link = linkResult.data;
   return (
-    <MetaAdAccountConnection
-      brandId={brandId}
-      connected={!!link && link.status === "connected"}
-      metaAdAccountId={link?.meta_ad_account_id ?? null}
-      status={link?.status ?? null}
-      lastSyncedAt={link?.last_synced_at ?? null}
-    />
+    <>
+      <MetaAdAccountConnection
+        brandId={brandId}
+        connected={!!link && link.status === "connected"}
+        metaAdAccountId={link?.meta_ad_account_id ?? null}
+        status={link?.status ?? null}
+        lastSyncedAt={link?.last_synced_at ?? null}
+      />
+      {link && link.status === "connected" && <MetaAdsSyncSection brandId={brandId} />}
+    </>
   );
 }
