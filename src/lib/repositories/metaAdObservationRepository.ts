@@ -72,3 +72,22 @@ export async function getObservationsForLink(linkId: string): Promise<Repository
   }
   return { data: data ?? [], error: null }
 }
+
+export async function getObservationsInRange(
+  linkId: string,
+  periodStart: string,
+  periodEnd: string
+): Promise<RepositoryResult<Array<Record<string, unknown>>>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("meta_ad_observations")
+    .select("*")
+    .eq("meta_ad_account_link_id", linkId)
+    .gte("period_start", periodStart)
+    .lte("period_end", periodEnd)
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+  return { data: data ?? [], error: null }
+}

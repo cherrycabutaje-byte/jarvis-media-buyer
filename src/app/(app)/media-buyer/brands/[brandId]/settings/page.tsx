@@ -5,6 +5,7 @@ import { getWorkspacesForUser } from "@/lib/repositories/workspaceRepository";
 import OwnerGuardrailsSettings from "@/components/OwnerGuardrailsSettings";
 import MetaAdAccountConnection from "@/components/MetaAdAccountConnection";
 import MetaAdsSyncSection from "@/components/MetaAdsSyncSection";
+import PerformanceMonitorSection from "@/components/PerformanceMonitorSection";
 import { getMetaAdAccountLinkForBrand } from "@/lib/repositories/metaAdAccountRepository";
 
 export default async function BrandAdvertisingGoalsPage({
@@ -88,7 +89,12 @@ async function MetaAdAccountConnectionSection({ brandId }: { brandId: string }) 
         status={link?.status ?? null}
         lastSyncedAt={link?.last_synced_at ?? null}
       />
-      {link && link.status === "connected" && <MetaAdsSyncSection brandId={brandId} />}
+      {link && link.status === "connected" && (
+        <>
+          <MetaAdsSyncSection brandId={brandId} />
+          <PerformanceMonitorSection brandId={brandId} />
+        </>
+      )}
     </>
   );
 }
