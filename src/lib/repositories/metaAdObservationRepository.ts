@@ -73,8 +73,22 @@ export async function getObservationsForLink(linkId: string): Promise<Repository
   return { data: data ?? [], error: null }
 }
 
+/**
+ * ENTITY-GRAIN INTEGRITY (mandatory): filters by entity_type AND
+ * entity_id at the query layer, in addition to link_id and period.
+ * meta_ad_observations stores account/campaign/ad-set/ad rows in
+ * the SAME table, and these grains genuinely overlap (a campaign's
+ * spend and its own ad sets' spend both exist as separate rows) -
+ * querying by link_id and period alone would silently mix multiple
+ * overlapping grains together and double/triple-count spend,
+ * impressions, and every other metric. This function returns
+ * observations for exactly ONE explicit entity - never an
+ * indiscriminate sum across grains.
+ */
 export async function getObservationsInRange(
   linkId: string,
+  entityType: string,
+  entityId: string,
   periodStart: string,
   periodEnd: string
 ): Promise<RepositoryResult<Array<Record<string, unknown>>>> {
@@ -83,6 +97,8 @@ export async function getObservationsInRange(
     .from("meta_ad_observations")
     .select("*")
     .eq("meta_ad_account_link_id", linkId)
+    .eq("entity_type", entityType)
+    .eq("entity_id", entityId)
     .gte("period_start", periodStart)
     .lte("period_end", periodEnd)
 
@@ -90,4 +106,21 @@ export async function getObservationsInRange(
     return { data: null, error: error.message }
   }
   return { data: data ?? [], error: null }
+}
+
+/**
+ * Defensive, application-layer second filter (defense in depth).
+ * Even though getObservationsInRange already filters at the SQL
+ * query layer, this pure function re-asserts the same entity-grain
+ * boundary in application code - directly testable without a live
+ * database, and a safety net if the query layer were ever changed
+ * incorrectly in the future. Never a substitute for the query
+ * filter, only a second, independent guard.
+ */
+export function filterRowsByEntity(
+  rows: Array<Record<string, unknown>>,
+  entityType: string,
+  entityId: string
+): Array<Record<string, unknown>> {
+  return rows.filter((r) => r.entity_type === entityType && r.entity_id === entityId)
 }

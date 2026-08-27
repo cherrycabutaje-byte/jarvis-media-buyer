@@ -42,7 +42,7 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
 
   return (
     <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "16px", padding: "24px", marginTop: "16px" }}>
-      <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#f1f5f9", margin: "0 0 4px" }}>Performance changes</h3>
+      <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#f1f5f9", margin: "0 0 4px" }}>Performance changes (account-level)</h3>
       <p style={{ fontSize: "13px", color: "#94a3b8", margin: "0 0 16px" }}>Diagnosis not performed yet.</p>
 
       <button
@@ -112,6 +112,26 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
               No synced observations exist yet for either period. Run &quot;Verify &amp; Sync Advertising Data&quot; above first.
             </p>
           )}
+
+          <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid #1e293b" }}>
+            <p style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase", margin: "0 0 8px" }}>
+              Evidence check
+            </p>
+            <p style={{ fontSize: "14px", fontWeight: 700, color: "#e2e8f0", margin: "0 0 12px" }}>
+              {result.evidenceLabel}
+            </p>
+            {result.evidenceSignals?.map((s) => (
+              <div key={s.metric} style={{ marginBottom: "10px" }}>
+                <p style={{ fontSize: "13px", fontWeight: 700, color: "#94a3b8", margin: "0 0 2px" }}>{s.metric}:</p>
+                <p style={{ fontSize: "13px", color: s.status === "SUFFICIENT" ? "#94a3b8" : "#facc15", margin: 0 }}>
+                  {s.customerExplanation}
+                </p>
+              </div>
+            ))}
+            <p style={{ fontSize: "12px", color: "#64748b", marginTop: "12px", marginBottom: 0 }}>
+              Diagnosis: Not performed yet.
+            </p>
+          </div>
         </div>
       )}
     </div>
