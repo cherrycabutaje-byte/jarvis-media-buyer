@@ -153,6 +153,34 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
               </p>
             </div>
           )}
+
+          {result.solutionCandidates && result.solutionCandidates.length > 0 && (
+            <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid #1e293b" }}>
+              <p style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase", margin: "0 0 12px" }}>
+                Possible next steps
+              </p>
+              {result.solutionCandidates.map((c) => (
+                <div key={c.label} style={{ marginBottom: "12px" }}>
+                  <p style={{ fontSize: "14px", fontWeight: 700, color: "#e2e8f0", margin: "0 0 2px" }}>{c.label}</p>
+                  <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 4px" }}>Status: {c.status.replace(/_/g, " ").toLowerCase()}</p>
+                  <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>{c.rationale}</p>
+                  {c.unavailableReason && (
+                    <p style={{ fontSize: "12px", color: "#facc15", margin: "4px 0 0" }}>Not currently available: {c.unavailableReason}</p>
+                  )}
+                </div>
+              ))}
+              {result.solutionConstraints && result.solutionConstraints.length > 0 && (
+                <div style={{ marginTop: "8px" }}>
+                  {result.solutionConstraints.map((note) => (
+                    <p key={note} style={{ fontSize: "11px", color: "#64748b", margin: "0 0 4px" }}>{note}</p>
+                  ))}
+                </div>
+              )}
+              <p style={{ fontSize: "12px", color: "#64748b", marginTop: "8px", marginBottom: 0 }}>
+                No action has been taken. Any next step requires your review and approval.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -8,6 +8,7 @@ import { getObservationsInRange, filterRowsByEntity } from "@/lib/repositories/m
 import { aggregateObservations, comparePeriods, evaluateMonitor, type AggregatedMetrics, type PeriodComparison, type RawObservationRow, type MonitorResult } from "@/lib/product/performanceAggregation"
 import { evaluateEvidence, buildDiagnosticEvidencePacket, type EvidenceContext, type SignalEvidenceResult, type OverallGateStatus } from "@/lib/product/evidenceGate"
 import { runDiagnosticEngine, type DiagnosticResult, type DiagnosticHypothesis } from "@/lib/product/diagnosticEngine"
+import { runSolutionEngine, type SolutionContext, type SolutionCandidate } from "@/lib/product/solutionEngine"
 
 /**
  * Production flow (Performance Monitor V1 + Evidence Gate V1):
@@ -44,6 +45,14 @@ export interface CustomerFacingDiagnosticHypothesis {
   supportingEvidenceText: string[]
 }
 
+export interface CustomerFacingSolutionCandidate {
+  label: string
+  category: SolutionCandidate["category"]
+  status: SolutionCandidate["status"]
+  rationale: string
+  unavailableReason: string | null
+}
+
 export interface PerformanceSummaryResult {
   success: boolean
   error: string | null
@@ -59,6 +68,8 @@ export interface PerformanceSummaryResult {
   diagnosticState: DiagnosticResult["overallState"] | null
   diagnosticHypotheses: CustomerFacingDiagnosticHypothesis[] | null
   diagnosticNote: string | null
+  solutionCandidates: CustomerFacingSolutionCandidate[] | null
+  solutionConstraints: string[] | null
 }
 
 function toRawRow(row: Record<string, unknown>): RawObservationRow {
@@ -182,6 +193,7 @@ export async function getPerformanceSummaryAction(
     success: false, error, currentPeriod: null, previousPeriod: null, current: null, previous: null,
     comparison: null, monitor: null, evidenceStatus: null, evidenceLabel: null, evidenceSignals: null,
     diagnosticState: null, diagnosticHypotheses: null, diagnosticNote: null,
+    solutionCandidates: null, solutionConstraints: null,
   })
 
   const supabase = await createClient()
@@ -260,6 +272,33 @@ export async function getPerformanceSummaryAction(
     .filter((h): h is CustomerFacingDiagnosticHypothesis => h !== null)
   const diagnosticNote = diagnosticResult.unresolvedQuestions[0] ?? null
 
+  // Solution Engine V1 - consumes ONLY the real DiagnosticResult
+  // plus verified capability/budget context, never raw Meta data.
+  // Capabilities reflect genuinely implemented infrastructure in
+  // this codebase (Hybrid Decision Engine, Static Creative
+  // Producer); metaWriteAvailable is always false since no Meta
+  // write provider exists. hasEligibleExistingAsset and budget stay
+  // null in V1 - honestly not yet wired to a real per-brand query,
+  // rather than fabricated.
+  const solutionContext: SolutionContext = {
+    capabilities: {
+      creativeLibraryAvailable: true,
+      staticCreativeProductionAvailable: true,
+      metaWriteAvailable: false,
+      hasEligibleExistingAsset: null,
+    },
+    budget: { maxTestBudgetCents: null, currency: null },
+    ownerObjective: null,
+  }
+  const solutionResult = runSolutionEngine(diagnosticResult, solutionContext)
+  const solutionCandidates: CustomerFacingSolutionCandidate[] = solutionResult.candidates.map((c) => ({
+    label: c.label,
+    category: c.category,
+    status: c.status,
+    rationale: c.rationale,
+    unavailableReason: c.unavailableBecause[0] ?? null,
+  }))
+
   return {
     success: true,
     error: null,
@@ -275,5 +314,7 @@ export async function getPerformanceSummaryAction(
     diagnosticState: diagnosticResult.overallState,
     diagnosticHypotheses,
     diagnosticNote,
+    solutionCandidates,
+    solutionConstraints: solutionResult.unresolvedConstraints,
   }
 }

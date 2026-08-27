@@ -133,6 +133,7 @@ console.log("\n=== INTEGRATION 9: Server Action return type genuinely includes e
     success: false, error: "x", currentPeriod: null, previousPeriod: null, current: null, previous: null,
     comparison: null, monitor: null, evidenceStatus: null, evidenceLabel: null, evidenceSignals: null,
     diagnosticState: null, diagnosticHypotheses: null, diagnosticNote: null,
+    solutionCandidates: null, solutionConstraints: null,
   }
   const keys = Object.keys(sampleResult)
   assert(keys.includes("evidenceStatus") && keys.includes("evidenceLabel") && keys.includes("evidenceSignals"), "PerformanceSummaryResult genuinely carries evidence state fields")
