@@ -7,6 +7,7 @@ import { getMetaAdAccountLinkForBrand } from "@/lib/repositories/metaAdAccountRe
 import { getObservationsInRange, filterRowsByEntity } from "@/lib/repositories/metaAdObservationRepository"
 import { aggregateObservations, comparePeriods, evaluateMonitor, type AggregatedMetrics, type PeriodComparison, type RawObservationRow, type MonitorResult } from "@/lib/product/performanceAggregation"
 import { evaluateEvidence, buildDiagnosticEvidencePacket, type EvidenceContext, type SignalEvidenceResult, type OverallGateStatus } from "@/lib/product/evidenceGate"
+import { runDiagnosticEngine, type DiagnosticResult, type DiagnosticHypothesis } from "@/lib/product/diagnosticEngine"
 
 /**
  * Production flow (Performance Monitor V1 + Evidence Gate V1):
@@ -37,6 +38,12 @@ export interface CustomerFacingSignalEvidence {
   customerExplanation: string
 }
 
+export interface CustomerFacingDiagnosticHypothesis {
+  label: string
+  confidenceLabel: "High" | "Moderate" | "Low"
+  supportingEvidenceText: string[]
+}
+
 export interface PerformanceSummaryResult {
   success: boolean
   error: string | null
@@ -49,6 +56,9 @@ export interface PerformanceSummaryResult {
   evidenceStatus: OverallGateStatus | null
   evidenceLabel: string | null
   evidenceSignals: CustomerFacingSignalEvidence[] | null
+  diagnosticState: DiagnosticResult["overallState"] | null
+  diagnosticHypotheses: CustomerFacingDiagnosticHypothesis[] | null
+  diagnosticNote: string | null
 }
 
 function toRawRow(row: Record<string, unknown>): RawObservationRow {
@@ -124,6 +134,30 @@ const EVIDENCE_STATUS_LABEL: Record<OverallGateStatus, string> = {
   NOT_APPLICABLE: "NOT ENOUGH DATA YET",
 }
 
+const DIRECTION_VERB: Record<string, string> = { UP: "increased", DOWN: "decreased", UNCHANGED: "stayed relatively stable" }
+const CONFIDENCE_LABEL: Record<string, "High" | "Moderate" | "Low"> = { HIGH: "High", MODERATE: "Moderate", LOW: "Low" }
+
+function formatEvidenceText(ref: { metric: string; direction: string | null; percentChange: number | null }): string {
+  const name = CUSTOMER_METRIC_NAMES[ref.metric] ?? ref.metric
+  const verb = ref.direction ? (DIRECTION_VERB[ref.direction] ?? "changed") : "changed"
+  const pct = ref.percentChange !== null ? ` ${Math.abs(ref.percentChange).toFixed(0)}%` : ""
+  return `${name} ${verb}${pct}`
+}
+
+/**
+ * Only SUPPORTED/PLAUSIBLE (identified) mechanism hypotheses reach
+ * the customer - INSUFFICIENT_EVIDENCE/CONTRADICTED/NOT_APPLICABLE
+ * entries are not surfaced directly in this minimal V1 UI.
+ */
+function toCustomerFacingHypothesis(h: DiagnosticHypothesis): CustomerFacingDiagnosticHypothesis | null {
+  if (h.status !== "SUPPORTED" && h.status !== "PLAUSIBLE") return null
+  return {
+    label: h.label,
+    confidenceLabel: CONFIDENCE_LABEL[h.confidence ?? "LOW"] ?? "Low",
+    supportingEvidenceText: h.supportingEvidence.map(formatEvidenceText),
+  }
+}
+
 /**
  * ENTITY-GRAIN CONTRACT (mandatory): every call represents exactly
  * ONE explicit entity type and ID - never a mixed/derived aggregate
@@ -147,6 +181,7 @@ export async function getPerformanceSummaryAction(
   const fail = (error: string): PerformanceSummaryResult => ({
     success: false, error, currentPeriod: null, previousPeriod: null, current: null, previous: null,
     comparison: null, monitor: null, evidenceStatus: null, evidenceLabel: null, evidenceSignals: null,
+    diagnosticState: null, diagnosticHypotheses: null, diagnosticNote: null,
   })
 
   const supabase = await createClient()
@@ -209,18 +244,21 @@ export async function getPerformanceSummaryAction(
   }
   const evidenceGateResult = evaluateEvidence(evidenceContext, currentAggregated, previousAggregated, monitor)
 
-  // Built to prove the full pipeline runs end-to-end on real data -
-  // deliberately NOT included in the returned client-facing result.
-  // This is the typed hand-off boundary for a FUTURE Diagnostic
-  // Engine only; no such engine exists or is called here.
-  const _diagnosticPacket = buildDiagnosticEvidencePacket(evidenceContext, evidenceGateResult, monitor)
-  void _diagnosticPacket
+  // Diagnostic Evidence Packet - the ONLY input runDiagnosticEngine
+  // accepts. Never bypassed with raw MonitorResult or observations.
+  const diagnosticPacket = buildDiagnosticEvidencePacket(evidenceContext, evidenceGateResult, monitor)
+  const diagnosticResult = runDiagnosticEngine(diagnosticPacket)
 
   const evidenceSignals: CustomerFacingSignalEvidence[] = evidenceGateResult.signals.map((s) => ({
     metric: CUSTOMER_METRIC_NAMES[s.metric] ?? s.metric,
     status: s.status,
     customerExplanation: customerExplanationFor(s),
   }))
+
+  const diagnosticHypotheses = diagnosticResult.hypotheses
+    .map(toCustomerFacingHypothesis)
+    .filter((h): h is CustomerFacingDiagnosticHypothesis => h !== null)
+  const diagnosticNote = diagnosticResult.unresolvedQuestions[0] ?? null
 
   return {
     success: true,
@@ -234,5 +272,8 @@ export async function getPerformanceSummaryAction(
     evidenceStatus: evidenceGateResult.overallStatus,
     evidenceLabel: EVIDENCE_STATUS_LABEL[evidenceGateResult.overallStatus],
     evidenceSignals,
+    diagnosticState: diagnosticResult.overallState,
+    diagnosticHypotheses,
+    diagnosticNote,
   }
 }

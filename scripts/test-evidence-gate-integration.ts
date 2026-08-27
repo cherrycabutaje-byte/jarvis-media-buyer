@@ -132,6 +132,7 @@ console.log("\n=== INTEGRATION 9: Server Action return type genuinely includes e
   const sampleResult: Awaited<ReturnType<typeof getPerformanceSummaryAction>> = {
     success: false, error: "x", currentPeriod: null, previousPeriod: null, current: null, previous: null,
     comparison: null, monitor: null, evidenceStatus: null, evidenceLabel: null, evidenceSignals: null,
+    diagnosticState: null, diagnosticHypotheses: null, diagnosticNote: null,
   }
   const keys = Object.keys(sampleResult)
   assert(keys.includes("evidenceStatus") && keys.includes("evidenceLabel") && keys.includes("evidenceSignals"), "PerformanceSummaryResult genuinely carries evidence state fields")
@@ -150,21 +151,20 @@ console.log("\n=== INTEGRATION 10: UI mapping uses customer-friendly wording, ne
   assert(!(ctrSignal?.reasons.includes("INSUFFICIENT_IMPRESSIONS") && "INSUFFICIENT_IMPRESSIONS".includes(" ")), "raw reason codes are UPPER_SNAKE_CASE, structurally never a natural sentence - confirming they cannot double as customer text unmapped")
 }
 
-console.log("\n=== INTEGRATION 11: No diagnostic ENGINE/reasoning function or caller exists anywhere in this slice ===")
+console.log("\n=== INTEGRATION 11: No SOLUTION ENGINE/recommendation reasoning exists anywhere in this slice ===")
 {
-  // Deliberately narrower than a bare "diagnos" substring check -
-  // buildDiagnosticEvidencePacket and the DiagnosticEvidencePacket
-  // type are the INTENDED, correctly-named boundary artifacts this
-  // slice is required to establish. This test instead looks for
-  // evidence of an actual diagnostic reasoning engine/caller
-  // (something that CONSUMES the packet to produce a conclusion),
-  // which must not exist.
+  // Diagnostic Engine V1 was subsequently approved and wired in as
+  // its own slice (see test-diagnostic-engine-integration.ts) - its
+  // presence here is now correct, intended architecture, not a
+  // violation. This test now checks for the boundary that genuinely
+  // still must not exist: a Solution Engine or root-cause/action
+  // reasoning layer built on top of the diagnosis.
   const actionSource = fs.readFileSync(path.join(process.cwd(), "src/lib/actions/performanceSummaryActions.ts"), "utf-8")
   const normalized = actionSource.toLowerCase().replace(/\s/g, "")
-  const forbidden = ["diagnosticengine", "runDiagnos".toLowerCase(), "diagnose(", "rootcause", "root_cause", "hypothesis", "solutionengine"]
+  const forbidden = ["solutionengine", "nextbestaction", "recommendationengine", "rootcauseengine"]
   const found = forbidden.filter((w) => normalized.includes(w))
-  assert(found.length === 0, `no diagnostic reasoning engine/caller exists in the action (found: ${found.join(", ") || "none"})`)
-  assert(actionSource.includes("buildDiagnosticEvidencePacket"), "the intended DiagnosticEvidencePacket boundary IS correctly present (this is the required hand-off type, not a violation)")
+  assert(found.length === 0, `no Solution Engine/recommendation reasoning exists in the action (found: ${found.join(", ") || "none"})`)
+  assert(actionSource.includes("buildDiagnosticEvidencePacket") && actionSource.includes("runDiagnosticEngine"), "the intended DiagnosticEvidencePacket and Diagnostic Engine V1 boundary ARE correctly present (approved, wired architecture, not a violation)")
 }
 
 console.log("\n=== INTEGRATION 12: No recommendation/action language introduced in the wired flow ===")

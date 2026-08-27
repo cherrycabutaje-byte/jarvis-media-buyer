@@ -132,6 +132,27 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
               Diagnosis: Not performed yet.
             </p>
           </div>
+
+          {result.diagnosticHypotheses && result.diagnosticHypotheses.length > 0 && (
+            <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid #1e293b" }}>
+              <p style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase", margin: "0 0 12px" }}>
+                Diagnostic analysis
+              </p>
+              {result.diagnosticHypotheses.map((h) => (
+                <div key={h.label} style={{ marginBottom: "14px" }}>
+                  <p style={{ fontSize: "14px", fontWeight: 700, color: "#e2e8f0", margin: "0 0 2px" }}>{h.label}</p>
+                  <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 6px" }}>Evidence strength: {h.confidenceLabel}</p>
+                  {h.supportingEvidenceText.map((line) => (
+                    <p key={line} style={{ fontSize: "13px", color: "#94a3b8", margin: "0 0 2px" }}>&bull; {line}</p>
+                  ))}
+                </div>
+              ))}
+              <p style={{ fontSize: "13px", fontWeight: 700, color: "#e2e8f0", margin: "8px 0 2px" }}>Root cause:</p>
+              <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                Not yet established. {result.diagnosticNote}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

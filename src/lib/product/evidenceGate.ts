@@ -304,6 +304,13 @@ export interface DiagnosticEvidencePacket {
     currentValue: number | null
     absoluteChange: number | null
     percentChange: number | null
+    // direction/material are passed through UNCHANGED from Performance
+    // Monitor's own already-computed ObservedChange - never re-derived
+    // or re-thresholded here. This lets a future Diagnostic Engine
+    // reason about direction/materiality without inventing a second,
+    // potentially contradictory threshold of its own.
+    direction: "UP" | "DOWN" | "UNCHANGED" | null
+    material: boolean
   }>
   evidenceStatus: "SUFFICIENT" | "PARTIALLY_SUFFICIENT"
 }
@@ -326,6 +333,8 @@ export function buildDiagnosticEvidencePacket(
       currentValue: c.currentValue,
       absoluteChange: c.absoluteChange,
       percentChange: c.percentChange,
+      direction: c.direction,
+      material: c.material,
     }))
 
   if (observedChanges.length === 0) {
