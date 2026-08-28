@@ -152,20 +152,24 @@ console.log("\n=== INTEGRATION 10: UI mapping uses customer-friendly wording, ne
   assert(!(ctrSignal?.reasons.includes("INSUFFICIENT_IMPRESSIONS") && "INSUFFICIENT_IMPRESSIONS".includes(" ")), "raw reason codes are UPPER_SNAKE_CASE, structurally never a natural sentence - confirming they cannot double as customer text unmapped")
 }
 
-console.log("\n=== INTEGRATION 11: No SOLUTION ENGINE/recommendation reasoning exists anywhere in this slice ===")
+console.log("\n=== INTEGRATION 11: No unapproved execution/recommendation-action layer exists beyond the approved Diagnosis -> Solution -> Action Proposal chain ===")
 {
-  // Diagnostic Engine V1 was subsequently approved and wired in as
-  // its own slice (see test-diagnostic-engine-integration.ts) - its
+  // Diagnostic Engine V1, Solution Engine V1, and Action Proposal V1
+  // were each subsequently approved and wired in as their own slices
+  // (see the respective test-*-integration.ts files) - their
   // presence here is now correct, intended architecture, not a
   // violation. This test now checks for the boundary that genuinely
-  // still must not exist: a Solution Engine or root-cause/action
-  // reasoning layer built on top of the diagnosis.
+  // still must not exist: an execution/write layer that acts on a
+  // proposal automatically, bypassing the owner's explicit decision.
   const actionSource = fs.readFileSync(path.join(process.cwd(), "src/lib/actions/performanceSummaryActions.ts"), "utf-8")
   const normalized = actionSource.toLowerCase().replace(/\s/g, "")
-  const forbidden = ["solutionengine", "nextbestaction", "recommendationengine", "rootcauseengine"]
+  const forbidden = ["nextbestaction", "recommendationengine", "rootcauseengine", "executeaction(", "autoexecute", "applychange("]
   const found = forbidden.filter((w) => normalized.includes(w))
-  assert(found.length === 0, `no Solution Engine/recommendation reasoning exists in the action (found: ${found.join(", ") || "none"})`)
-  assert(actionSource.includes("buildDiagnosticEvidencePacket") && actionSource.includes("runDiagnosticEngine"), "the intended DiagnosticEvidencePacket and Diagnostic Engine V1 boundary ARE correctly present (approved, wired architecture, not a violation)")
+  assert(found.length === 0, `no unapproved execution/recommendation-reasoning layer exists in the action (found: ${found.join(", ") || "none"})`)
+  assert(
+    actionSource.includes("buildDiagnosticEvidencePacket") && actionSource.includes("runDiagnosticEngine") && actionSource.includes("runSolutionEngine"),
+    "the intended DiagnosticEvidencePacket, Diagnostic Engine V1, and Solution Engine V1 boundaries ARE correctly present (approved, wired architecture, not a violation)"
+  )
 }
 
 console.log("\n=== INTEGRATION 12: No recommendation/action language introduced in the wired flow ===")

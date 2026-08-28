@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { getPerformanceSummaryAction, type PerformanceSummaryResult } from "@/lib/actions/performanceSummaryActions";
+import { proposeActionForCandidateAction, listActionProposalsAction, type CustomerFacingActionProposal } from "@/lib/actions/actionProposalActions";
 
 export interface PerformanceMonitorSectionProps {
   brandId: string;
@@ -18,23 +19,50 @@ function fmt(value: number | null, decimals = 2): string {
 export default function PerformanceMonitorSection({ brandId }: PerformanceMonitorSectionProps) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PerformanceSummaryResult | null>(null);
+  const [proposals, setProposals] = useState<CustomerFacingActionProposal[]>([]);
+  const [proposingCode, setProposingCode] = useState<string | null>(null);
+  const [proposalMessage, setProposalMessage] = useState<string | null>(null);
 
-  async function handleLoad() {
-    setLoading(true);
+  function getPeriods() {
     const today = new Date();
     const currentEnd = today.toISOString().slice(0, 10);
     const currentStart = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const previousEnd = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const previousStart = new Date(today.getTime() - 13 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    return { current: { start: currentStart, end: currentEnd }, previous: { start: previousStart, end: previousEnd } };
+  }
 
-    const summary = await getPerformanceSummaryAction(
-      brandId,
-      { start: currentStart, end: currentEnd },
-      { start: previousStart, end: previousEnd }
-    );
+  async function handleLoad() {
+    setLoading(true);
+    const { current, previous } = getPeriods();
+    const summary = await getPerformanceSummaryAction(brandId, current, previous);
     setResult(summary);
     setLoading(false);
+    await loadProposals();
   }
+
+  async function loadProposals() {
+    const list = await listActionProposalsAction(brandId);
+    if (list.success && list.proposals) {
+      setProposals(list.proposals.filter((p) => p.status === "PENDING_OWNER_REVIEW"));
+    }
+  }
+
+  async function handlePropose(candidateCode: string) {
+    setProposingCode(candidateCode);
+    setProposalMessage(null);
+    const { current, previous } = getPeriods();
+    const outcome = await proposeActionForCandidateAction(brandId, current, previous, candidateCode);
+    if (outcome.success && outcome.proposal) {
+      setProposalMessage("Proposal created. See it below for your review.");
+      await loadProposals();
+    } else {
+      setProposalMessage(outcome.error ?? "Could not create a proposal.");
+    }
+    setProposingCode(null);
+  }
+
+
 
   const rowStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #1e293b" };
   const labelStyle: React.CSSProperties = { fontSize: "13px", color: "#94a3b8" };
@@ -167,8 +195,22 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
                   {c.unavailableReason && (
                     <p style={{ fontSize: "12px", color: "#facc15", margin: "4px 0 0" }}>Not currently available: {c.unavailableReason}</p>
                   )}
+                  {c.status === "ELIGIBLE" && (
+                    <button
+                      onClick={() => handlePropose(c.code)}
+                      disabled={proposingCode === c.code}
+                      style={{
+                        fontSize: "12px", fontWeight: 700, color: "#080b12", background: "#22d3ee",
+                        border: "none", borderRadius: "8px", padding: "8px 14px", marginTop: "6px",
+                        cursor: proposingCode === c.code ? "default" : "pointer", fontFamily: "inherit",
+                      }}
+                    >
+                      {proposingCode === c.code ? "Creating proposal..." : "Propose this experiment"}
+                    </button>
+                  )}
                 </div>
               ))}
+              {proposalMessage && <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>{proposalMessage}</p>}
               {result.solutionConstraints && result.solutionConstraints.length > 0 && (
                 <div style={{ marginTop: "8px" }}>
                   {result.solutionConstraints.map((note) => (
@@ -179,6 +221,29 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
               <p style={{ fontSize: "12px", color: "#64748b", marginTop: "8px", marginBottom: 0 }}>
                 No action has been taken. Any next step requires your review and approval.
               </p>
+            </div>
+          )}
+
+          {proposals.length > 0 && (
+            <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid #1e293b" }}>
+              <p style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase", margin: "0 0 12px" }}>
+                Pending owner review
+              </p>
+              {proposals.map((p) => (
+                <div key={p.id} style={{ marginBottom: "14px", padding: "12px", background: "#080b12", border: "1px solid #1e293b", borderRadius: "10px" }}>
+                  <p style={{ fontSize: "14px", fontWeight: 700, color: "#e2e8f0", margin: "0 0 4px" }}>{p.label}</p>
+                  <p style={{ fontSize: "13px", color: "#94a3b8", margin: "0 0 6px" }}>{p.rationale}</p>
+                  <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 4px" }}>
+                    Proposed spend: {p.proposedSpendCents === null ? "Not set" : (p.proposedSpendCents / 100).toFixed(2)}
+                  </p>
+                  <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 8px" }}>
+                    Maximum test budget: {p.maxAuthorizedSpendCents === null ? "Not set" : (p.maxAuthorizedSpendCents / 100).toFixed(2)}
+                  </p>
+                  <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                    No action has been taken.
+                  </p>
+                </div>
+              ))}
             </div>
           )}
         </div>

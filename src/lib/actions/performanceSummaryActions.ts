@@ -46,6 +46,7 @@ export interface CustomerFacingDiagnosticHypothesis {
 }
 
 export interface CustomerFacingSolutionCandidate {
+  code: SolutionCandidate["code"]
   label: string
   category: SolutionCandidate["category"]
   status: SolutionCandidate["status"]
@@ -292,6 +293,7 @@ export async function getPerformanceSummaryAction(
   }
   const solutionResult = runSolutionEngine(diagnosticResult, solutionContext)
   const solutionCandidates: CustomerFacingSolutionCandidate[] = solutionResult.candidates.map((c) => ({
+    code: c.code,
     label: c.label,
     category: c.category,
     status: c.status,
