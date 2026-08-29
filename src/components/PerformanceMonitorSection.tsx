@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { getPerformanceSummaryAction, type PerformanceSummaryResult } from "@/lib/actions/performanceSummaryActions";
-import { proposeActionForCandidateAction, listActionProposalsAction, decideActionProposalAction, type CustomerFacingActionProposal } from "@/lib/actions/actionProposalActions";
+import { proposeActionForCandidateAction, listActionProposalsAction, decideActionProposalAction, evaluateExecutionReadinessAction, type CustomerFacingActionProposal } from "@/lib/actions/actionProposalActions";
 
 export interface PerformanceMonitorSectionProps {
   brandId: string;
@@ -22,6 +22,7 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
   const [proposals, setProposals] = useState<CustomerFacingActionProposal[]>([]);
   const [proposingCode, setProposingCode] = useState<string | null>(null);
   const [proposalMessage, setProposalMessage] = useState<string | null>(null);
+  const [executionReadiness, setExecutionReadiness] = useState<Record<string, { status: string; messages: string[] }>>({});
 
   function getPeriods() {
     const today = new Date();
@@ -45,6 +46,21 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
     const list = await listActionProposalsAction(brandId);
     if (list.success && list.proposals) {
       setProposals(list.proposals);
+      const approved = list.proposals.filter((p) => p.status === "APPROVED");
+      const readinessEntries = await Promise.all(
+        approved.map(async (p) => {
+          const readiness = await evaluateExecutionReadinessAction(brandId, p.id);
+          if (readiness.success && readiness.result) {
+            return [p.id, { status: readiness.result.status, messages: readiness.result.reasons.map((r) => r.message) }] as const;
+          }
+          return null;
+        })
+      );
+      const readinessMap: Record<string, { status: string; messages: string[] }> = {};
+      for (const entry of readinessEntries) {
+        if (entry) readinessMap[entry[0]] = entry[1];
+      }
+      setExecutionReadiness(readinessMap);
     }
   }
 
@@ -293,11 +309,29 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
                       </p>
                     </div>
                   ) : (
-                    <p style={{ fontSize: "12px", fontWeight: 700, color: p.status === "APPROVED" ? "#4ade80" : "#94a3b8", margin: 0 }}>
-                      {p.status === "APPROVED" ? "Approved" : p.status === "DECLINED" ? "Declined" : p.status.replace(/_/g, " ").toLowerCase()}
-                      {p.decidedAt ? ` on ${new Date(p.decidedAt).toLocaleDateString()}` : ""}
-                      . No action has been taken.
-                    </p>
+                    <div>
+                      <p style={{ fontSize: "12px", fontWeight: 700, color: p.status === "APPROVED" ? "#4ade80" : "#94a3b8", margin: "0 0 8px" }}>
+                        {p.status === "APPROVED" ? "Approved" : p.status === "DECLINED" ? "Declined" : p.status.replace(/_/g, " ").toLowerCase()}
+                        {p.decidedAt ? ` on ${new Date(p.decidedAt).toLocaleDateString()}` : ""}
+                        . No action has been taken.
+                      </p>
+                      {p.status === "APPROVED" && executionReadiness[p.id] && (
+                        <div style={{ padding: "10px", background: "#0d1420", border: "1px solid #1e293b", borderRadius: "8px" }}>
+                          <p style={{ fontSize: "12px", fontWeight: 700, color: executionReadiness[p.id].status === "EXECUTABLE" ? "#4ade80" : "#94a3b8", margin: "0 0 6px" }}>
+                            Execution readiness: {executionReadiness[p.id].status === "EXECUTABLE" ? "Ready" : "Not ready"}
+                          </p>
+                          {executionReadiness[p.id].messages.length > 0 && (
+                            <>
+                              <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 4px" }}>Why:</p>
+                              {executionReadiness[p.id].messages.map((m) => (
+                                <p key={m} style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>&bull; {m}</p>
+                              ))}
+                            </>
+                          )}
+                          <p style={{ fontSize: "11px", color: "#64748b", margin: "6px 0 0" }}>No advertising changes have been made.</p>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               ))}

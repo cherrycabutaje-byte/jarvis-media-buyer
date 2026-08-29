@@ -5,6 +5,7 @@ import { getBrandById } from "@/lib/repositories/brandRepository"
 import { getWorkspacesForUser } from "@/lib/repositories/workspaceRepository"
 import { insertActionProposal, getActionProposalsForBrand, getActionProposalById, decideActionProposal, expireActionProposal, type StoredActionProposal } from "@/lib/repositories/actionProposalRepository"
 import { validateOwnerDecision, evaluateActionProposalFreshness, type OwnerDecisionType, type ActionProposalStatus, type FreshnessStatus } from "@/lib/product/ownerDecision"
+import { evaluateExecutionEligibility, type ExecutionEligibilityInput, type ExecutionEligibilityResult } from "@/lib/product/executionGate"
 import { createActionProposalContent, type ActionProposalContext } from "@/lib/product/actionProposal"
 import type { SolutionCandidate } from "@/lib/product/solutionEngine"
 import type { OwnerGuardrails } from "@/lib/product/ownerGuardrails"
@@ -347,4 +348,83 @@ export async function decideActionProposalAction(
   }
 
   return { success: true, error: null, proposal: toCustomerFacing(result.data) }
+}
+
+/**
+ * Read-only server-side evaluation of whether an approved proposal
+ * is safe and concrete enough to be eligible for a future executor.
+ * Never mutates the proposal, guardrails, budget, or Meta connection
+ * state it reads. Never calls Meta. Never spends money. The client
+ * supplies only brandId/proposalId - never a proposal payload,
+ * approval status, guardrail result, spend amount, Meta target, or
+ * workspace/brand, so a forged client-side value can never be used
+ * to fabricate an EXECUTABLE result.
+ *
+ * Server-side trust boundary, in exact order: authenticate ->
+ * authorize workspace/brand -> fetch exact persisted proposal ->
+ * verify proposal belongs to brand -> fetch the owner's CURRENT
+ * guardrails -> fetch the brand's CURRENTLY live Meta ad account ->
+ * evaluate.
+ */
+export async function evaluateExecutionReadinessAction(
+  brandId: string,
+  proposalId: string
+): Promise<{ success: boolean; error: string | null; result: ExecutionEligibilityResult | null }> {
+  const access = await verifyBrandAccess(brandId)
+  if ("error" in access) {
+    return { success: false, error: access.error, result: null }
+  }
+
+  const proposalResult = await getActionProposalById(proposalId)
+  if (proposalResult.error || !proposalResult.data) {
+    return { success: false, error: "That proposal could not be found.", result: null }
+  }
+  if (proposalResult.data.brand_id !== brandId) {
+    return { success: false, error: "That proposal does not belong to this business.", result: null }
+  }
+
+  const brandResult = await getBrandById(brandId)
+  if (brandResult.error || !brandResult.data) {
+    return { success: false, error: brandResult.error ?? "Business not found.", result: null }
+  }
+
+  const currentGuardrails: OwnerGuardrails = {
+    authorityMode: (brandResult.data.authority_mode as OwnerGuardrails["authorityMode"]) ?? null,
+    currency: brandResult.data.budget_currency,
+    monthlyBudgetCents: brandResult.data.monthly_budget_cents,
+    dailyMaximumCents: brandResult.data.daily_maximum_cents,
+    maxTestBudgetCents: brandResult.data.max_test_budget_cents,
+  }
+
+  const linkResult = await getMetaAdAccountLinkForBrand(brandId)
+  const currentMetaAdAccountId = linkResult.data ? linkResult.data.meta_ad_account_id : null
+
+  const row = proposalResult.data
+  const eligibilityInput: ExecutionEligibilityInput = {
+    proposal: {
+      solutionCandidateCode: row.solution_candidate_code,
+      category: row.category,
+      status: row.status as ActionProposalStatus,
+      createdAt: row.created_at,
+      decidedAt: row.decided_at,
+      decidedBy: row.decided_by,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      proposedSpendCents: row.proposed_spend_cents,
+      maxAuthorizedSpendCents: row.max_authorized_spend_cents,
+      // Not currently persisted anywhere in V1 - see executionGate.ts
+      // module documentation for why this is always null today.
+      proposedCurrency: null,
+      // Not currently captured anywhere in V1 - only an account-level
+      // entityId exists.
+      targetMetaEntityId: null,
+      // Not currently captured anywhere in V1 - no creative asset
+      // selection field exists.
+      creativeAssetId: null,
+    },
+    currentGuardrails,
+    currentMetaAdAccountId,
+  }
+
+  return { success: true, error: null, result: evaluateExecutionEligibility(eligibilityInput) }
 }
