@@ -3,7 +3,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { getBrandById } from "@/lib/repositories/brandRepository"
 import { getWorkspacesForUser } from "@/lib/repositories/workspaceRepository"
-import { insertActionProposal, getActionProposalsForBrand, type StoredActionProposal } from "@/lib/repositories/actionProposalRepository"
+import { insertActionProposal, getActionProposalsForBrand, getActionProposalById, decideActionProposal, expireActionProposal, type StoredActionProposal } from "@/lib/repositories/actionProposalRepository"
+import { validateOwnerDecision, evaluateActionProposalFreshness, type OwnerDecisionType, type ActionProposalStatus, type FreshnessStatus } from "@/lib/product/ownerDecision"
 import { createActionProposalContent, type ActionProposalContext } from "@/lib/product/actionProposal"
 import type { SolutionCandidate } from "@/lib/product/solutionEngine"
 import type { OwnerGuardrails } from "@/lib/product/ownerGuardrails"
@@ -15,10 +16,10 @@ import { runDiagnosticEngine } from "@/lib/product/diagnosticEngine"
 import { runSolutionEngine, type SolutionContext } from "@/lib/product/solutionEngine"
 
 /**
- * Action Proposal V1 scope note: this file intentionally contains
- * NO decision/approval logic (no decideActionProposal, no Approve/
- * Decline). Owner Approval Workflow V1 (a future slice) will own
- * that. This slice only constructs, persists, and lists proposals.
+ * Owner Approval Workflow V1 slice: this file now contains decision
+ * logic (decideActionProposalAction). Decisions never execute
+ * anything and never call Meta - they only change the proposal's
+ * own stored status.
  */
 
 export interface CustomerFacingActionProposal {
@@ -35,6 +36,7 @@ export interface CustomerFacingActionProposal {
   guardrailReasons: string[]
   status: string
   createdAt: string
+  decidedAt: string | null
 }
 
 export interface ActionProposalListResult {
@@ -58,6 +60,7 @@ function toCustomerFacing(row: StoredActionProposal): CustomerFacingActionPropos
     guardrailReasons: row.guardrail_reasons,
     status: row.status,
     createdAt: row.created_at,
+    decidedAt: row.decided_at,
   }
 }
 
@@ -132,7 +135,24 @@ export async function listActionProposalsAction(brandId: string): Promise<Action
     return { success: false, error: result.error, proposals: null }
   }
 
-  return { success: true, error: null, proposals: (result.data ?? []).map(toCustomerFacing) }
+  // Lazily expires any still-PENDING_OWNER_REVIEW proposal that has
+  // gone stale, so the UI naturally reflects the true current state
+  // without requiring the owner to click anything first. Uses the
+  // SAME atomic expireActionProposal primitive as the decide path -
+  // no separate expiration mechanism, no background job.
+  const now = new Date()
+  const rows = result.data ?? []
+  const updatedRows = await Promise.all(
+    rows.map(async (row) => {
+      if (row.status !== "PENDING_OWNER_REVIEW") return row
+      const freshness: FreshnessStatus = evaluateActionProposalFreshness(row.created_at, now)
+      if (freshness === "FRESH") return row
+      const expireResult = await expireActionProposal(row.id)
+      return expireResult.data ?? row
+    })
+  )
+
+  return { success: true, error: null, proposals: updatedRows.map(toCustomerFacing) }
 }
 
 /**
@@ -261,4 +281,70 @@ function extractOldestSyncTimestampForProposal(rows: Array<Record<string, unknow
     .filter((t) => !Number.isNaN(t))
   if (timestamps.length === 0) return null
   return new Date(Math.min(...timestamps)).toISOString()
+}
+
+/**
+ * Records an explicit owner decision (approve or decline) on an
+ * ELIGIBLE-derived proposal. Never executes anything and never
+ * calls Meta - this only changes the proposal's own stored status,
+ * decided_at, and decided_by.
+ *
+ * Cross-brand tampering closure: verifying access to brandId alone
+ * does not confirm proposalId actually belongs to that brand. RLS's
+ * own policy (gated on the row's real workspace_id) already
+ * prevents a genuine cross-tenant leak, but this explicit
+ * application-layer check gives a clear, honest error message and
+ * closes the gap in depth rather than relying on RLS alone.
+ *
+ * Double-decision race closure: the repository's own atomic
+ * UPDATE...WHERE status = 'PENDING_OWNER_REVIEW' guard means two
+ * simultaneous decisions can never both succeed - the second's
+ * update affects zero rows and is reported as an honest failure.
+ */
+export async function decideActionProposalAction(
+  brandId: string,
+  proposalId: string,
+  decision: OwnerDecisionType
+): Promise<{ success: boolean; error: string | null; proposal: CustomerFacingActionProposal | null }> {
+  // Server-side enforcement path, in exact order:
+  // authenticate -> authorize workspace/brand -> fetch exact
+  // persisted proposal -> verify proposal belongs to brand -> verify
+  // PENDING_OWNER_REVIEW -> evaluate freshness -> decide or expire.
+  const access = await verifyBrandAccess(brandId)
+  if ("error" in access) {
+    return { success: false, error: access.error, proposal: null }
+  }
+
+  const existingResult = await getActionProposalById(proposalId)
+  if (existingResult.error || !existingResult.data) {
+    return { success: false, error: "That proposal could not be found.", proposal: null }
+  }
+  if (existingResult.data.brand_id !== brandId) {
+    return { success: false, error: "That proposal does not belong to this business.", proposal: null }
+  }
+
+  // Freshness is evaluated using the server's own current time and
+  // the proposal's own persisted, trusted created_at - never a
+  // client-supplied timestamp.
+  const freshness = evaluateActionProposalFreshness(existingResult.data.created_at, new Date())
+
+  const validation = validateOwnerDecision(existingResult.data.status as ActionProposalStatus, decision, freshness)
+  if (!validation.valid || !validation.resultingStatus) {
+    return { success: false, error: validation.reason ?? "This proposal cannot be decided.", proposal: null }
+  }
+
+  // A stale proposal resolves to EXPIRED regardless of which
+  // decision was requested - expireActionProposal never sets
+  // decided_at/decided_by, since expiration is a system-driven
+  // lifecycle transition, never a fabricated human decision.
+  const result =
+    validation.resultingStatus === "EXPIRED"
+      ? await expireActionProposal(proposalId)
+      : await decideActionProposal(proposalId, validation.resultingStatus, access.userId)
+
+  if (result.error || !result.data) {
+    return { success: false, error: result.error ?? "Could not record your decision. It may have already been decided.", proposal: null }
+  }
+
+  return { success: true, error: null, proposal: toCustomerFacing(result.data) }
 }

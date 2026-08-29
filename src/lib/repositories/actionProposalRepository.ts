@@ -7,12 +7,10 @@ export interface RepositoryResult<T> {
 }
 
 /**
- * Owner Approval Workflow V1 (a future slice) will introduce
- * decision-related reads/writes. decided_at/decided_by remain
- * dormant columns on the deployed schema (added in
- * 20260827000001_action_proposals.sql, which is not rewritten here)
- * but are intentionally UNUSED by Action Proposal V1 - no code in
- * this repository ever reads or writes them.
+ * Owner Approval Workflow V1 slice: decided_at/decided_by are now
+ * genuinely read and written (they were dormant, unused columns on
+ * the deployed schema in the prior Action Proposal V1 slice, added
+ * in 20260827000001_action_proposals.sql).
  */
 export interface StoredActionProposal {
   id: string
@@ -36,6 +34,8 @@ export interface StoredActionProposal {
   status: string
   created_at: string
   created_by: string | null
+  decided_at: string | null
+  decided_by: string | null
 }
 
 export async function insertActionProposal(content: ActionProposalContent, createdByUserId: string): Promise<RepositoryResult<StoredActionProposal>> {
@@ -84,4 +84,79 @@ export async function getActionProposalsForBrand(brandId: string): Promise<Repos
     return { data: null, error: error.message }
   }
   return { data: (data ?? []) as StoredActionProposal[], error: null }
+}
+
+export async function getActionProposalById(id: string): Promise<RepositoryResult<StoredActionProposal>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.from("action_proposals").select("*").eq("id", id).single()
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+  return { data: data as StoredActionProposal, error: null }
+}
+
+/**
+ * Records an explicit owner decision. Only ever transitions a
+ * proposal that is CURRENTLY PENDING_OWNER_REVIEW - the
+ * .eq("status", "PENDING_OWNER_REVIEW") guard is an atomic Postgres
+ * row-level UPDATE...WHERE: two simultaneous decisions on the same
+ * proposal can never both succeed, since after the first commits,
+ * the second's WHERE clause no longer matches and its own UPDATE
+ * affects zero rows (triggering .single()'s own error path, handled
+ * by the caller as "may have already been decided"). This is the
+ * real mechanism preventing a double-decision race - not an
+ * application-level lock that could itself have a gap.
+ *
+ * Never executes anything and never calls Meta - this only changes
+ * the proposal's own stored status, decided_at, and decided_by.
+ */
+export async function decideActionProposal(
+  id: string,
+  decision: "APPROVED" | "DECLINED",
+  decidedByUserId: string
+): Promise<RepositoryResult<StoredActionProposal>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("action_proposals")
+    .update({ status: decision, decided_at: new Date().toISOString(), decided_by: decidedByUserId })
+    .eq("id", id)
+    .eq("status", "PENDING_OWNER_REVIEW")
+    .select()
+    .single()
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+  return { data: data as StoredActionProposal, error: null }
+}
+
+/**
+ * Atomically transitions a PENDING_OWNER_REVIEW proposal to EXPIRED
+ * due to staleness (never invoked as a substitute for a genuine
+ * owner decision). Uses the exact same concurrency principle as
+ * decideActionProposal: the .eq("status", "PENDING_OWNER_REVIEW")
+ * guard means a race between an expiration attempt and a genuine
+ * decision can never both succeed - whichever UPDATE commits first
+ * wins, and the second affects zero rows.
+ *
+ * Deliberately does NOT set decided_at/decided_by - those columns
+ * semantically represent a HUMAN decision, and expiration is a
+ * system-driven lifecycle transition, not an owner decision. Never
+ * fabricates a decided_by user.
+ */
+export async function expireActionProposal(id: string): Promise<RepositoryResult<StoredActionProposal>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("action_proposals")
+    .update({ status: "EXPIRED" })
+    .eq("id", id)
+    .eq("status", "PENDING_OWNER_REVIEW")
+    .select()
+    .single()
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+  return { data: data as StoredActionProposal, error: null }
 }

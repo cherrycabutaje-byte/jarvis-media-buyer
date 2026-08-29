@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { getPerformanceSummaryAction, type PerformanceSummaryResult } from "@/lib/actions/performanceSummaryActions";
-import { proposeActionForCandidateAction, listActionProposalsAction, type CustomerFacingActionProposal } from "@/lib/actions/actionProposalActions";
+import { proposeActionForCandidateAction, listActionProposalsAction, decideActionProposalAction, type CustomerFacingActionProposal } from "@/lib/actions/actionProposalActions";
 
 export interface PerformanceMonitorSectionProps {
   brandId: string;
@@ -44,8 +44,31 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
   async function loadProposals() {
     const list = await listActionProposalsAction(brandId);
     if (list.success && list.proposals) {
-      setProposals(list.proposals.filter((p) => p.status === "PENDING_OWNER_REVIEW"));
+      setProposals(list.proposals);
     }
+  }
+
+  async function handleDecide(proposalId: string, decision: "APPROVE" | "DECLINE") {
+    const target = proposals.find((p) => p.id === proposalId);
+    let message =
+      decision === "APPROVE"
+        ? "Approve this proposal? This does not execute anything - it only records your decision for the record."
+        : "Decline this proposal? This does not execute anything - it only records your decision for the record.";
+    if (decision === "APPROVE" && target?.guardrailDecision === "BLOCKED") {
+      message =
+        "This proposal exceeds your configured budget limits. Approving it now only records your decision - it does not execute anything or override your budget settings. Approve anyway?";
+    }
+    const confirmed = window.confirm(message);
+    if (!confirmed) return;
+    await decideActionProposalAction(brandId, proposalId, decision);
+    await loadProposals();
+  }
+
+  function guardrailStatusText(decision: string): string {
+    if (decision === "ALLOWED") return "Within your configured budget.";
+    if (decision === "BLOCKED") return "Exceeds your configured budget limits.";
+    if (decision === "INSUFFICIENT_CONFIGURATION") return "Budget check incomplete - configure your budget settings to complete this check.";
+    return decision.replace(/_/g, " ").toLowerCase();
   }
 
   async function handlePropose(candidateCode: string) {
@@ -227,7 +250,7 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
           {proposals.length > 0 && (
             <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid #1e293b" }}>
               <p style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase", margin: "0 0 12px" }}>
-                Pending owner review
+                Proposals
               </p>
               {proposals.map((p) => (
                 <div key={p.id} style={{ marginBottom: "14px", padding: "12px", background: "#080b12", border: "1px solid #1e293b", borderRadius: "10px" }}>
@@ -239,9 +262,43 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
                   <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 8px" }}>
                     Maximum test budget: {p.maxAuthorizedSpendCents === null ? "Not set" : (p.maxAuthorizedSpendCents / 100).toFixed(2)}
                   </p>
-                  <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
-                    No action has been taken.
+                  <p style={{ fontSize: "12px", color: p.guardrailDecision === "BLOCKED" ? "#f87171" : "#64748b", margin: "0 0 8px" }}>
+                    Budget check: {guardrailStatusText(p.guardrailDecision)}
                   </p>
+                  {p.status === "PENDING_OWNER_REVIEW" ? (
+                    <>
+                      <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 8px" }}>
+                        No action has been taken.
+                      </p>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button
+                          onClick={() => handleDecide(p.id, "APPROVE")}
+                          style={{ fontSize: "12px", fontWeight: 700, color: "#080b12", background: "#4ade80", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit" }}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleDecide(p.id, "DECLINE")}
+                          style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0", background: "#1e293b", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit" }}
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    </>
+                  ) : p.status === "EXPIRED" ? (
+                    <div>
+                      <p style={{ fontSize: "13px", fontWeight: 700, color: "#facc15", margin: "0 0 4px" }}>Expired</p>
+                      <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0 }}>
+                        This proposal is no longer current enough for approval. Refresh the performance analysis and create a new proposal if the opportunity still exists.
+                      </p>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: "12px", fontWeight: 700, color: p.status === "APPROVED" ? "#4ade80" : "#94a3b8", margin: 0 }}>
+                      {p.status === "APPROVED" ? "Approved" : p.status === "DECLINED" ? "Declined" : p.status.replace(/_/g, " ").toLowerCase()}
+                      {p.decidedAt ? ` on ${new Date(p.decidedAt).toLocaleDateString()}` : ""}
+                      . No action has been taken.
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

@@ -147,36 +147,30 @@ console.log("\n=== CASE 14: Determinism - the same candidate and context always 
   assert(JSON.stringify(proposalA) === JSON.stringify(proposalB), "calling createActionProposalContent twice on identical inputs produces byte-identical content")
 }
 
-console.log("\n=== CASE 15 (CTO blocker 2): No decision/approval function exists anywhere in the pure module or repository ===")
+console.log("\n=== CASE 15 (superseded by Owner Approval Workflow V1): decision/approval functionality now genuinely exists, correctly, in its own dedicated slice ===")
 {
   const pureSource = fs.readFileSync(path.join(process.cwd(), "src/lib/product/actionProposal.ts"), "utf-8")
   const repoSource = fs.readFileSync(path.join(process.cwd(), "src/lib/repositories/actionProposalRepository.ts"), "utf-8")
   const actionSource = fs.readFileSync(path.join(process.cwd(), "src/lib/actions/actionProposalActions.ts"), "utf-8")
-  assert(!pureSource.includes("decideActionProposal"), "no decision logic exists in the pure construction module")
-  assert(!repoSource.includes("export async function decideActionProposal"), "decideActionProposal repository function does not exist in this slice - Owner Approval Workflow V1 owns that")
-  assert(!actionSource.includes("decideActionProposalAction") && !actionSource.includes("export async function decideActionProposal"), "no decideActionProposalAction Server Action exists in this slice")
+  assert(!pureSource.includes("decideActionProposal"), "the PURE construction module itself still contains no decision logic - that lives in the dedicated ownerDecision.ts module instead")
+  assert(repoSource.includes("export async function decideActionProposal"), "decideActionProposal repository function now genuinely exists, approved as part of Owner Approval Workflow V1")
+  assert(actionSource.includes("export async function decideActionProposalAction"), "decideActionProposalAction Server Action now genuinely exists")
 }
 
-console.log("\n=== CASE 16 (CTO blocker 2): No Approve/Decline UI exists anywhere in the component ===")
+console.log("\n=== CASE 16 (superseded by Owner Approval Workflow V1): Approve/Decline UI now genuinely exists, with no Execute anywhere ===")
 {
   const uiSource = fs.readFileSync(path.join(process.cwd(), "src/components/PerformanceMonitorSection.tsx"), "utf-8")
-  assert(!uiSource.includes(">Approve<"), "no Approve button exists in the UI")
-  assert(!uiSource.includes(">Decline<"), "no Decline button exists in the UI")
-  assert(!uiSource.includes(">Execute<"), "no Execute button exists in the UI")
-  assert(uiSource.includes("Pending owner review"), "the required 'Pending owner review' heading is present")
-  assert(uiSource.includes("No action has been taken."), "the required 'No action has been taken.' notice is present")
+  assert(/>\s*Approve\s*</.test(uiSource), "an Approve button now genuinely exists in the UI")
+  assert(/>\s*Decline\s*</.test(uiSource), "a Decline button now genuinely exists in the UI")
+  assert(!uiSource.includes(">Execute<"), "no Execute button exists anywhere - execution remains a future slice's responsibility")
+  assert(uiSource.includes("No action has been taken."), "the 'No action has been taken.' notice is still shown for still-pending proposals")
 }
 
-console.log("\n=== CASE 17 (CTO blocker 2): decided_at/decided_by remain dormant, unused DB fields, explicitly documented as such ===")
+console.log("\n=== CASE 17 (superseded by Owner Approval Workflow V1): decided_at/decided_by are now genuinely read and written ===")
 {
-  // Checks for actual FIELD USAGE (a query assignment like
-  // "decided_at:" or "decided_by:") - the comment explaining these
-  // columns are dormant legitimately mentions the bare words, so a
-  // cruder substring check would incorrectly flag that documentation
-  // itself as a violation.
   const repoSource = fs.readFileSync(path.join(process.cwd(), "src/lib/repositories/actionProposalRepository.ts"), "utf-8")
-  assert(!repoSource.includes("decided_at:") && !repoSource.includes("decided_by:"), "no query in this repository ever assigns/selects the dormant decided_at/decided_by columns from the deployed schema")
-  assert(repoSource.toLowerCase().includes("dormant"), "the dormant nature of these unused columns is explicitly documented in code, not silently left unexplained")
+  assert(repoSource.includes("decided_at:") && repoSource.includes("decided_by:"), "decided_at/decided_by are now genuinely written by the real decideActionProposal function")
+  assert(repoSource.includes("decided_at: string | null") && repoSource.includes("decided_by: string | null"), "decided_at/decided_by are now genuinely part of the StoredActionProposal type, no longer dormant")
 }
 
 console.log(`\n=== RESULTS: ${passed} passed, ${failed} failed ===`)
