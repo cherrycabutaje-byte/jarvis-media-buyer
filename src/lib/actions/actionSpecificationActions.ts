@@ -11,15 +11,20 @@ import {
   getActionSpecificationById,
   updateDraftSpecification,
   finalizeSpecification,
+  authorizeSpecification,
+  declineSpecification,
   listSyncedEntitiesForLink,
   type StoredActionSpecification,
 } from "@/lib/repositories/actionSpecificationRepository"
 import {
   evaluateSpecificationReadiness,
+  validateConcreteAuthorization,
   type SpecificationReadinessResult,
   type SpecificationActionType,
+  type SpecificationStatus,
+  type AuthorizationDecisionType,
 } from "@/lib/product/concreteActionSpecification"
-import type { OwnerGuardrails } from "@/lib/product/ownerGuardrails"
+import { evaluateProposedMediaAction, type OwnerGuardrails } from "@/lib/product/ownerGuardrails"
 
 /**
  * Concrete Action Specification V1 slice.
@@ -46,6 +51,8 @@ export interface CustomerFacingSpecification {
   status: string
   createdAt: string
   finalizedAt: string | null
+  decidedAt: string | null
+  decidedBy: string | null
 }
 
 function toCustomerFacing(row: StoredActionSpecification): CustomerFacingSpecification {
@@ -62,6 +69,8 @@ function toCustomerFacing(row: StoredActionSpecification): CustomerFacingSpecifi
     status: row.status,
     createdAt: row.created_at,
     finalizedAt: row.finalized_at,
+    decidedAt: row.decided_at,
+    decidedBy: row.decided_by,
   }
 }
 
@@ -369,4 +378,165 @@ export async function finalizeSpecificationAction(
   }
 
   return { success: true, error: null, specification: toCustomerFacing(finalizeResult.data), readiness }
+}
+
+/**
+ * Concrete Owner Authorization V1 slice.
+ *
+ * Records an explicit human authorization decision on a READY
+ * specification. Client supplies ONLY brandId/specificationId/
+ * decision - never any execution-relevant field (spend, currency,
+ * Meta account, target, creative, action type). Every one of those
+ * is independently reloaded and revalidated server-side against the
+ * CURRENT trusted state before AUTHORIZE can succeed.
+ *
+ * DECLINE requires only that the specification is genuinely READY -
+ * it deliberately does NOT require the full revalidation gauntlet,
+ * since declining always remains safe even when current guardrails
+ * would block authorization (Section 8's explicit requirement).
+ *
+ * AUTHORIZE requires ALL of the following to hold against CURRENT,
+ * freshly-reloaded state - not the specification's own possibly-
+ * stale snapshot values used only for comparison:
+ *   - parent proposal exists, belongs to the same brand, remains
+ *     APPROVED
+ *   - specification action type matches the proposal's own
+ *   - the brand's CURRENTLY linked Meta account matches exactly
+ *     (no drift)
+ *   - the exact target is still a trusted, locally synced entity
+ *     for that account
+ *   - the creative asset still exists and belongs to the correct
+ *     workspace/brand
+ *   - proposed spend is a valid positive integer
+ *   - proposed spend does not exceed the CURRENT owner maximum
+ *   - currency matches the CURRENT trusted brand configuration
+ *   - the CURRENT guardrail re-evaluation is genuinely ALLOWED
+ *
+ * Any single failure fails the whole AUTHORIZE attempt closed - the
+ * specification itself is NEVER mutated to fit new limits, and
+ * nothing is silently retargeted to a drifted account.
+ */
+export async function decideSpecificationAuthorizationAction(
+  brandId: string,
+  specificationId: string,
+  decision: AuthorizationDecisionType
+): Promise<{ success: boolean; error: string | null; specification: CustomerFacingSpecification | null; blockers: string[] }> {
+  const access = await verifyBrandAccess(brandId)
+  if ("error" in access) {
+    return { success: false, error: access.error, specification: null, blockers: [] }
+  }
+
+  const specResult = await getActionSpecificationById(specificationId)
+  if (specResult.error || !specResult.data) {
+    return { success: false, error: "That specification could not be found.", specification: null, blockers: [] }
+  }
+  if (specResult.data.brand_id !== brandId) {
+    return { success: false, error: "That specification does not belong to this business.", specification: null, blockers: [] }
+  }
+
+  const transitionCheck = validateConcreteAuthorization(specResult.data.status as SpecificationStatus, decision)
+  if (!transitionCheck.valid) {
+    return { success: false, error: transitionCheck.reason ?? "This specification cannot be decided.", specification: null, blockers: [] }
+  }
+
+  if (decision === "DECLINE") {
+    const declineResult = await declineSpecification(specificationId, access.userId)
+    if (declineResult.error || !declineResult.data) {
+      return { success: false, error: declineResult.error ?? "Could not record your decision. It may have already been decided.", specification: null, blockers: [] }
+    }
+    return { success: true, error: null, specification: toCustomerFacing(declineResult.data), blockers: [] }
+  }
+
+  const proposalResult = await getActionProposalById(specResult.data.proposal_id)
+  if (proposalResult.error || !proposalResult.data) {
+    return { success: false, error: "The proposal behind this specification could not be found.", specification: null, blockers: [] }
+  }
+  if (proposalResult.data.brand_id !== brandId) {
+    return { success: false, error: "This specification's proposal does not belong to this business.", specification: null, blockers: [] }
+  }
+
+  const blockers: string[] = []
+
+  if (proposalResult.data.status !== "APPROVED") {
+    blockers.push("The proposal behind this action is no longer approved.")
+  }
+  if (specResult.data.action_type !== proposalResult.data.solution_candidate_code) {
+    blockers.push("This specification no longer matches the approved proposal's action.")
+  }
+
+  const brandResult = await getBrandById(brandId)
+  if (brandResult.error || !brandResult.data) {
+    return { success: false, error: brandResult.error ?? "Business not found.", specification: null, blockers: [] }
+  }
+  const currentGuardrails: OwnerGuardrails = {
+    authorityMode: (brandResult.data.authority_mode as OwnerGuardrails["authorityMode"]) ?? null,
+    currency: brandResult.data.budget_currency,
+    monthlyBudgetCents: brandResult.data.monthly_budget_cents,
+    dailyMaximumCents: brandResult.data.daily_maximum_cents,
+    maxTestBudgetCents: brandResult.data.max_test_budget_cents,
+  }
+
+  const linkResult = await getMetaAdAccountLinkForBrand(brandId)
+  const currentMetaAdAccountId = linkResult.data ? linkResult.data.meta_ad_account_id : null
+  if (!currentMetaAdAccountId || currentMetaAdAccountId !== specResult.data.meta_ad_account_id) {
+    blockers.push("The connected Meta account has changed since this action was prepared.")
+  }
+
+  if (specResult.data.target_entity_id && specResult.data.target_entity_type && linkResult.data) {
+    const idsResult = await listSyncedEntitiesForLink(linkResult.data.id, specResult.data.target_entity_type)
+    if (!(idsResult.data ?? []).includes(specResult.data.target_entity_id)) {
+      blockers.push("The selected target is no longer available for this business.")
+    }
+  } else {
+    blockers.push("An exact target for this action has not been selected.")
+  }
+
+  if (specResult.data.creative_asset_id) {
+    const assetResult = await getCreativeAssetById(specResult.data.creative_asset_id)
+    const ok =
+      !assetResult.error &&
+      !!assetResult.data &&
+      assetResult.data.workspace_id === access.workspaceId &&
+      (assetResult.data.brand_id === null || assetResult.data.brand_id === brandId)
+    if (!ok) {
+      blockers.push("The selected creative could not be verified as belonging to this business.")
+    }
+  } else {
+    blockers.push("No test creative has been selected.")
+  }
+
+  if (specResult.data.proposed_spend_cents === null || !Number.isInteger(specResult.data.proposed_spend_cents) || specResult.data.proposed_spend_cents <= 0) {
+    blockers.push("The proposed test budget is not a valid positive amount.")
+  } else if (currentGuardrails.maxTestBudgetCents !== null && specResult.data.proposed_spend_cents > currentGuardrails.maxTestBudgetCents) {
+    blockers.push("The proposed test budget exceeds your currently configured maximum.")
+  }
+
+  if (!specResult.data.currency) {
+    blockers.push("No currency has been set for the proposed spend.")
+  } else if (currentGuardrails.currency !== null && specResult.data.currency !== currentGuardrails.currency) {
+    blockers.push("The proposed currency no longer matches your configured budget currency.")
+  }
+
+  if (specResult.data.proposed_spend_cents !== null && specResult.data.currency !== null) {
+    const guardrailResult = evaluateProposedMediaAction(
+      { type: "TEST_SPEND", amountCents: specResult.data.proposed_spend_cents, currency: specResult.data.currency },
+      currentGuardrails
+    )
+    if (guardrailResult.decision === "BLOCKED") {
+      blockers.push("This action exceeds your currently configured budget limits.")
+    } else if (guardrailResult.decision === "INSUFFICIENT_CONFIGURATION") {
+      blockers.push("Your budget and authority settings are not fully configured to authorize this action.")
+    }
+  }
+
+  if (blockers.length > 0) {
+    return { success: false, error: "This action cannot currently be authorized.", specification: toCustomerFacing(specResult.data), blockers }
+  }
+
+  const authorizeResult = await authorizeSpecification(specificationId, access.userId)
+  if (authorizeResult.error || !authorizeResult.data) {
+    return { success: false, error: authorizeResult.error ?? "Could not record your authorization. It may have already been decided.", specification: null, blockers: [] }
+  }
+
+  return { success: true, error: null, specification: toCustomerFacing(authorizeResult.data), blockers: [] }
 }

@@ -181,15 +181,18 @@ console.log("\n=== MIGRATION: exactly one new migration was added for this slice
   assert(!content.toLowerCase().includes("alter table action_proposals"), "the migration never retrofits fields into the frozen Action Proposal schema")
 }
 
-console.log("\n=== UI: No Authorize/Execute/Launch/Publish/Apply control exists anywhere (structural proof) ===")
+console.log("\n=== UI (superseded by Concrete Owner Authorization V1): No Execute/Launch/Publish/Apply control exists anywhere; a genuine Authorize control now legitimately exists ===")
 {
+  // "Waiting for your authorization" static status text was
+  // correctly REPLACED by the full interactive Authorize/Decline
+  // review flow once Concrete Owner Authorization V1 was approved -
+  // that slice's own UI text now legitimately exists here.
   const uiSource = fs.readFileSync(path.join(process.cwd(), "src/components/PerformanceMonitorSection.tsx"), "utf-8")
-  const forbidden = [">Authorize<", ">Execute<", ">Launch<", ">Publish<", ">Apply<", ">Apply to Meta<"]
+  const forbidden = [">Execute<", ">Launch<", ">Publish<", ">Apply<", ">Apply to Meta<"]
   const found = forbidden.filter((w) => uiSource.includes(w))
-  assert(found.length === 0, `no authorization/execution-triggering control exists anywhere in the UI (found: ${found.join(", ") || "none"})`)
+  assert(found.length === 0, `no execution-triggering control exists anywhere in the UI (found: ${found.join(", ") || "none"})`)
   assert(uiSource.includes("Prepare exact action"), "the required 'Prepare exact action' entry point is present")
-  assert(uiSource.includes("Ready for owner authorization"), "the required 'Ready for owner authorization' status label is present")
-  assert(uiSource.includes("Waiting for your authorization"), "the required owner-facing summary status text is present")
+  assert(uiSource.includes("Authorize exact action"), "the Concrete Owner Authorization V1 UI's own Authorize control now genuinely exists, superseding the earlier static 'Ready for owner authorization' summary-only text")
 }
 
 console.log(`\n=== RESULTS: ${passed} passed, ${failed} failed ===`)

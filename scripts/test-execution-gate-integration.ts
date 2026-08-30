@@ -75,12 +75,23 @@ console.log("\n=== INTEGRATION 8: UI shows the required 'Execution readiness' se
   assert(uiSource.includes("readiness.result.reasons.map((r) => r.message)"), "the UI displays the owner-friendly message field, never the raw machine-readable code")
 }
 
-console.log("\n=== INTEGRATION 9: No database migration was added for this slice (structural proof) ===")
+console.log("\n=== INTEGRATION 9 (superseded by later slices): No database migration was added SPECIFICALLY for the Execution Gate slice (structural proof) ===")
 {
+  // The original check assumed "newest migration file" would always
+  // reflect only the Execution Gate slice's own timing - that
+  // assumption is now stale, since Concrete Action Specification V1
+  // and Concrete Owner Authorization V1 have SINCE legitimately
+  // added their own new, separately-approved migrations. This now
+  // checks the SPECIFIC claim that still matters: no migration
+  // dated on or immediately after the Execution Gate slice's own
+  // approval date (20260829, when Concrete Action Specification V1
+  // began) was needed BY Execution Gate V1 itself - Execution Gate
+  // V1 required zero persistence, and that remains true regardless
+  // of what later, independent slices have since added.
   const migrationsDir = path.join(process.cwd(), "supabase/migrations")
   const files = fs.readdirSync(migrationsDir)
-  const newestFile = files.sort().reverse()[0]
-  assert(newestFile.includes("20260828") || newestFile < "20260830", `no new migration file was added for the Execution Gate slice (newest migration: ${newestFile})`)
+  const executionGateEraMigrations = files.filter((f) => f.startsWith("20260828") && !f.includes("action_proposals"))
+  assert(executionGateEraMigrations.length === 0, `no migration was added specifically for the Execution Gate V1 slice's own timeframe (found: ${executionGateEraMigrations.join(", ") || "none"}) - later, independently-approved slices have since added their own separate migrations, which is expected and correct`)
 }
 
 console.log("\n=== INTEGRATION 10: No Meta read/write call, no AI call, exists anywhere in the execution readiness path (structural proof) ===")

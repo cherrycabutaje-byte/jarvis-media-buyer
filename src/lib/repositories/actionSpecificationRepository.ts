@@ -39,10 +39,12 @@ export interface StoredActionSpecification {
   created_at: string
   created_by: string
   finalized_at: string | null
+  decided_at: string | null
+  decided_by: string | null
 }
 
 const SPECIFICATION_COLUMNS =
-  "id, workspace_id, brand_id, proposal_id, action_type, meta_ad_account_id, target_entity_type, target_entity_id, creative_asset_id, proposed_spend_cents, currency, status, created_at, created_by, finalized_at"
+  "id, workspace_id, brand_id, proposal_id, action_type, meta_ad_account_id, target_entity_type, target_entity_id, creative_asset_id, proposed_spend_cents, currency, status, created_at, created_by, finalized_at, decided_at, decided_by"
 
 export async function createDraftSpecification(params: {
   workspaceId: string
@@ -206,4 +208,61 @@ export async function listSyncedEntitiesForLink(linkId: string, entityType: stri
   }
   const uniqueIds = Array.from(new Set((data ?? []).map((row) => row.entity_id as string)))
   return { data: uniqueIds, error: null }
+}
+
+/**
+ * Concrete Owner Authorization V1 slice.
+ *
+ * Records an explicit human authorization decision. Atomically
+ * guarded by .eq("status", "READY_FOR_OWNER_AUTHORIZATION") - the
+ * exact same concurrency principle already proven for
+ * finalizeSpecification and action_proposals' decideActionProposal:
+ * a race between two simultaneous decisions (or an authorize vs a
+ * decline) can never both succeed, since after the first commits,
+ * the second's UPDATE affects zero rows.
+ *
+ * decided_at/decided_by are THIS table's OWN authorization
+ * provenance - never the proposal's. Once this succeeds, no
+ * function anywhere can mutate this row's execution-relevant
+ * fields again (the row is no longer DRAFT or READY, so both
+ * updateDraftSpecification and finalizeSpecification's own guards
+ * can never match it).
+ */
+export async function authorizeSpecification(id: string, authorizedByUserId: string): Promise<RepositoryResult<StoredActionSpecification>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("action_specifications")
+    .update({ status: "AUTHORIZED", decided_at: new Date().toISOString(), decided_by: authorizedByUserId })
+    .eq("id", id)
+    .eq("status", "READY_FOR_OWNER_AUTHORIZATION")
+    .select(SPECIFICATION_COLUMNS)
+    .single()
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+  return { data: data as StoredActionSpecification, error: null }
+}
+
+/**
+ * Records an explicit human decline decision. Never modifies the
+ * proposal, spend, target, creative, or Meta account - only this
+ * row's own status and authorization provenance. Uses the identical
+ * atomic guard as authorizeSpecification, so an AUTHORIZE and a
+ * DECLINE racing on the same row can never both succeed.
+ */
+export async function declineSpecification(id: string, declinedByUserId: string): Promise<RepositoryResult<StoredActionSpecification>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("action_specifications")
+    .update({ status: "DECLINED", decided_at: new Date().toISOString(), decided_by: declinedByUserId })
+    .eq("id", id)
+    .eq("status", "READY_FOR_OWNER_AUTHORIZATION")
+    .select(SPECIFICATION_COLUMNS)
+    .single()
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+  return { data: data as StoredActionSpecification, error: null }
 }

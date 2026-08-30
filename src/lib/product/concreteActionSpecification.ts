@@ -36,8 +36,9 @@
  */
 
 import { evaluateProposedMediaAction, type OwnerGuardrails } from "@/lib/product/ownerGuardrails"
+import { evaluateExecutionEligibility, type ExecutionEligibilityResult } from "@/lib/product/executionGate"
 
-export type SpecificationStatus = "DRAFT" | "READY_FOR_OWNER_AUTHORIZATION" | "SUPERSEDED"
+export type SpecificationStatus = "DRAFT" | "READY_FOR_OWNER_AUTHORIZATION" | "AUTHORIZED" | "DECLINED" | "SUPERSEDED"
 
 /** V1 supports exactly one action type. Adding a new one requires an
  * explicit, deliberate extension here - never inferred from a
@@ -201,4 +202,136 @@ export function evaluateSpecificationReadiness(input: SpecificationReadinessInpu
   }
 
   return { status: "READY", reasons: [] }
+}
+
+/**
+ * Concrete Owner Authorization V1 slice addition.
+ *
+ * PERMANENT INVARIANT: READY_FOR_OWNER_AUTHORIZATION != AUTHORIZED.
+ * An owner must explicitly authorize the exact immutable
+ * specification - this pure function validates ONLY the state
+ * transition itself (is READY the current status?). It does NOT
+ * revalidate Meta account/target/creative/spend/currency/guardrails
+ * - that full revalidation happens server-side, independently,
+ * before this function is ever called (see actionSpecificationActions.ts).
+ *
+ * Reauthorization and decision reversal are never permitted in V1:
+ * AUTHORIZED and DECLINED are both terminal. DRAFT cannot be
+ * authorized or declined at all - it must first reach READY.
+ */
+
+export type AuthorizationDecisionType = "AUTHORIZE" | "DECLINE"
+
+export interface AuthorizationValidationResult {
+  valid: boolean
+  resultingStatus: "AUTHORIZED" | "DECLINED" | null
+  reason: string | null
+}
+
+export function validateConcreteAuthorization(
+  currentStatus: SpecificationStatus,
+  decision: AuthorizationDecisionType
+): AuthorizationValidationResult {
+  if (currentStatus !== "READY_FOR_OWNER_AUTHORIZATION") {
+    return {
+      valid: false,
+      resultingStatus: null,
+      reason: `This specification is ${currentStatus.toLowerCase().replace(/_/g, " ")} and cannot be authorized or declined.`,
+    }
+  }
+
+  return {
+    valid: true,
+    resultingStatus: decision === "AUTHORIZE" ? "AUTHORIZED" : "DECLINED",
+    reason: null,
+  }
+}
+
+/**
+ * Concrete Owner Authorization V1 -> Execution Safety Gate bridge.
+ *
+ * SMALLEST SAFE INTEGRATION: executionGate.ts itself is NEVER
+ * modified. This function only WIRES a Concrete Action
+ * Specification's own concrete, authorized fields into the
+ * EXISTING, unchanged evaluateExecutionEligibility() input shape -
+ * the same pure gate function already proven in Execution Safety
+ * Gate V1. Prior to this slice, that gate's proposedCurrency/
+ * targetMetaEntityId/creativeAssetId inputs were always null from
+ * real data; this is the first slice where a real, concrete,
+ * authorized source for those fields exists.
+ *
+ * PERMANENT INVARIANT: AUTHORIZED != EXECUTABLE. Reaching AUTHORIZED
+ * status is necessary but never sufficient - the underlying gate
+ * still independently re-evaluates every safety condition (proposal
+ * approval, guardrails, spend/currency/target/creative validity)
+ * exactly as it always has. This function adds exactly one new,
+ * specification-specific gate BEFORE deferring to the existing gate:
+ * the specification's OWN authorization provenance (decided_by/
+ * decided_at on THIS row, never the proposal's) must itself be
+ * genuinely present - an AUTHORIZED status with missing provenance
+ * is never trusted, matching the same discipline already applied to
+ * proposal approval provenance in Execution Safety Gate V1.
+ */
+
+export interface AuthorizedSpecificationInput {
+  status: SpecificationStatus
+  decidedAt: string | null
+  decidedBy: string | null
+  actionType: SpecificationActionType
+  metaAdAccountId: string | null
+  targetEntityType: string | null
+  targetEntityId: string | null
+  creativeAssetId: string | null
+  proposedSpendCents: number | null
+  currency: string | null
+}
+
+export function evaluateAuthorizedSpecificationExecutionEligibility(
+  specification: AuthorizedSpecificationInput,
+  proposal: {
+    status: "PENDING_OWNER_REVIEW" | "APPROVED" | "DECLINED" | "EXPIRED"
+    solutionCandidateCode: string
+    category: string
+    createdAt: string
+    decidedAt: string | null
+    decidedBy: string | null
+    entityType: string
+    entityId: string
+    maxAuthorizedSpendCents: number | null
+  },
+  currentGuardrails: OwnerGuardrails,
+  currentMetaAdAccountId: string | null
+): ExecutionEligibilityResult {
+  if (specification.status !== "AUTHORIZED") {
+    return {
+      status: "NOT_EXECUTABLE",
+      reasons: [{ code: "SPECIFICATION_NOT_AUTHORIZED", message: "This exact action has not yet been authorized by the owner." }],
+    }
+  }
+  if (!specification.decidedBy || !specification.decidedAt) {
+    return {
+      status: "NOT_EXECUTABLE",
+      reasons: [{ code: "INVALID_AUTHORIZATION_PROVENANCE", message: "This specification's authorization record is incomplete and cannot be trusted." }],
+    }
+  }
+
+  return evaluateExecutionEligibility({
+    proposal: {
+      status: proposal.status,
+      solutionCandidateCode: proposal.solutionCandidateCode,
+      category: proposal.category,
+      createdAt: proposal.createdAt,
+      decidedAt: proposal.decidedAt,
+      decidedBy: proposal.decidedBy,
+      entityType: proposal.entityType,
+      entityId: proposal.entityId,
+      proposedSpendCents: specification.proposedSpendCents,
+      maxAuthorizedSpendCents: proposal.maxAuthorizedSpendCents,
+      proposedCurrency: specification.currency,
+      targetMetaEntityId: specification.targetEntityId,
+      creativeAssetId: specification.creativeAssetId,
+    },
+    currentGuardrails,
+    currentMetaAdAccountId,
+  })
 }

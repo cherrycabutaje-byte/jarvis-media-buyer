@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { getPerformanceSummaryAction, type PerformanceSummaryResult } from "@/lib/actions/performanceSummaryActions";
 import { proposeActionForCandidateAction, listActionProposalsAction, decideActionProposalAction, evaluateExecutionReadinessAction, type CustomerFacingActionProposal } from "@/lib/actions/actionProposalActions";
-import { createDraftSpecificationAction, updateDraftSpecificationAction, finalizeSpecificationAction, listAvailableTargetsAction, listAvailableCreativeAssetsAction, type CustomerFacingSpecification } from "@/lib/actions/actionSpecificationActions";
+import { createDraftSpecificationAction, updateDraftSpecificationAction, finalizeSpecificationAction, listAvailableTargetsAction, listAvailableCreativeAssetsAction, decideSpecificationAuthorizationAction, type CustomerFacingSpecification } from "@/lib/actions/actionSpecificationActions";
 
 export interface PerformanceMonitorSectionProps {
   brandId: string;
@@ -28,6 +28,7 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
   const [availableTargets, setAvailableTargets] = useState<string[]>([]);
   const [availableAssets, setAvailableAssets] = useState<Array<{ id: string; category: string; originalFilename: string | null }>>([]);
   const [specMessage, setSpecMessage] = useState<string | null>(null);
+  const [authBlockers, setAuthBlockers] = useState<string[]>([]);
 
   function getPeriods() {
     const today = new Date();
@@ -103,6 +104,30 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
       setSpecMessage(finalizeResult.error ?? "Could not finalize this specification.");
     } else {
       setSpecMessage(null);
+    }
+  }
+
+  async function handleAuthorizeDecision(brandIdParam: string, specificationId: string, proposalId: string, decision: "AUTHORIZE" | "DECLINE") {
+    setAuthBlockers([]);
+    if (decision === "AUTHORIZE") {
+      const confirmed = window.confirm(
+        "You are authorizing this exact advertising action as shown above.\n\nThis authorization does not itself publish or spend money.\n\nAuthorize?"
+      );
+      if (!confirmed) return;
+    } else {
+      const confirmed = window.confirm("Decline this exact action? This does not modify the proposal, spend, target, or creative, and does not touch Meta.");
+      if (!confirmed) return;
+    }
+    const result = await decideSpecificationAuthorizationAction(brandIdParam, specificationId, decision);
+    if (result.specification) {
+      setSpecifications((prev) => ({ ...prev, [proposalId]: result.specification! }));
+    }
+    if (!result.success) {
+      setSpecMessage(result.error ?? "Could not record your decision.");
+      setAuthBlockers(result.blockers ?? []);
+    } else {
+      setSpecMessage(null);
+      setAuthBlockers([]);
     }
   }
 
@@ -428,17 +453,59 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
                       )}
                       {p.status === "APPROVED" && specifications[p.id] && specifications[p.id].status === "READY_FOR_OWNER_AUTHORIZATION" && (
                         <div style={{ marginTop: "10px", padding: "10px", background: "#0d1420", border: "1px solid #1e293b", borderRadius: "8px" }}>
-                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0", margin: "0 0 8px" }}>Proposed advertising action</p>
+                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0", margin: "0 0 8px" }}>Review exact advertising action</p>
                           <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Action: Test an alternative creative</p>
-                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Account: {specifications[p.id].metaAdAccountId}</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Meta account: {specifications[p.id].metaAdAccountId}</p>
                           <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Target: {specifications[p.id].targetEntityId}</p>
                           <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Creative: {specifications[p.id].creativeAssetId}</p>
                           <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>
-                            Proposed test spend: {specifications[p.id].proposedSpendCents !== null ? (specifications[p.id].proposedSpendCents! / 100).toFixed(2) : "Not set"} {specifications[p.id].currency}
+                            Proposed test spend: {specifications[p.id].proposedSpendCents !== null ? (specifications[p.id].proposedSpendCents! / 100).toFixed(2) : "Not set"}
                           </p>
-                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 8px" }}>Maximum allowed test budget: {p.maxAuthorizedSpendCents === null ? "Not set" : (p.maxAuthorizedSpendCents / 100).toFixed(2)}</p>
-                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#facc15", margin: "0 0 6px" }}>Status: Waiting for your authorization</p>
-                          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>No advertising changes have been made. This is informational only.</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Currency: {specifications[p.id].currency}</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 8px" }}>Maximum current test budget: {p.maxAuthorizedSpendCents === null ? "Not set" : (p.maxAuthorizedSpendCents / 100).toFixed(2)}</p>
+                          <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                            <button
+                              onClick={() => handleAuthorizeDecision(brandId, specifications[p.id].id, p.id, "AUTHORIZE")}
+                              style={{ fontSize: "12px", fontWeight: 700, color: "#080b12", background: "#4ade80", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit" }}
+                            >
+                              Authorize exact action
+                            </button>
+                            <button
+                              onClick={() => handleAuthorizeDecision(brandId, specifications[p.id].id, p.id, "DECLINE")}
+                              style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0", background: "#1e293b", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit" }}
+                            >
+                              Decline
+                            </button>
+                          </div>
+                          {authBlockers.length > 0 && (
+                            <div style={{ marginBottom: "8px" }}>
+                              <p style={{ fontSize: "11px", color: "#f87171", margin: "0 0 4px" }}>This action cannot currently be authorized:</p>
+                              {authBlockers.map((b) => (
+                                <p key={b} style={{ fontSize: "11px", color: "#f87171", margin: "0 0 2px" }}>&bull; {b}</p>
+                              ))}
+                            </div>
+                          )}
+                          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>No advertising changes will occur from this decision alone.</p>
+                        </div>
+                      )}
+                      {p.status === "APPROVED" && specifications[p.id] && specifications[p.id].status === "AUTHORIZED" && (
+                        <div style={{ marginTop: "10px", padding: "10px", background: "#0d1420", border: "1px solid #1e293b", borderRadius: "8px" }}>
+                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#4ade80", margin: "0 0 6px" }}>Authorized</p>
+                          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 3px" }}>Authorized by: {specifications[p.id].decidedBy}</p>
+                          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 8px" }}>Authorized at: {specifications[p.id].decidedAt ? new Date(specifications[p.id].decidedAt!).toLocaleString() : ""}</p>
+                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0", margin: "0 0 6px" }}>Exact action:</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Account: {specifications[p.id].metaAdAccountId}</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Target: {specifications[p.id].targetEntityId}</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Creative: {specifications[p.id].creativeAssetId}</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 8px" }}>Test spend: {specifications[p.id].proposedSpendCents !== null ? (specifications[p.id].proposedSpendCents! / 100).toFixed(2) : ""} {specifications[p.id].currency}</p>
+                          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>No advertising changes have been made yet.</p>
+                        </div>
+                      )}
+                      {p.status === "APPROVED" && specifications[p.id] && specifications[p.id].status === "DECLINED" && (
+                        <div style={{ marginTop: "10px", padding: "10px", background: "#0d1420", border: "1px solid #1e293b", borderRadius: "8px" }}>
+                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#94a3b8", margin: "0 0 6px" }}>Declined</p>
+                          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 8px" }}>Declined at: {specifications[p.id].decidedAt ? new Date(specifications[p.id].decidedAt!).toLocaleString() : ""}</p>
+                          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>No advertising changes have been made.</p>
                         </div>
                       )}
                     </div>
