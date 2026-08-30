@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { getPerformanceSummaryAction, type PerformanceSummaryResult } from "@/lib/actions/performanceSummaryActions";
 import { proposeActionForCandidateAction, listActionProposalsAction, decideActionProposalAction, evaluateExecutionReadinessAction, type CustomerFacingActionProposal } from "@/lib/actions/actionProposalActions";
+import { createDraftSpecificationAction, updateDraftSpecificationAction, finalizeSpecificationAction, listAvailableTargetsAction, listAvailableCreativeAssetsAction, type CustomerFacingSpecification } from "@/lib/actions/actionSpecificationActions";
 
 export interface PerformanceMonitorSectionProps {
   brandId: string;
@@ -23,6 +24,10 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
   const [proposingCode, setProposingCode] = useState<string | null>(null);
   const [proposalMessage, setProposalMessage] = useState<string | null>(null);
   const [executionReadiness, setExecutionReadiness] = useState<Record<string, { status: string; messages: string[] }>>({});
+  const [specifications, setSpecifications] = useState<Record<string, CustomerFacingSpecification>>({});
+  const [availableTargets, setAvailableTargets] = useState<string[]>([]);
+  const [availableAssets, setAvailableAssets] = useState<Array<{ id: string; category: string; originalFilename: string | null }>>([]);
+  const [specMessage, setSpecMessage] = useState<string | null>(null);
 
   function getPeriods() {
     const today = new Date();
@@ -61,6 +66,43 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
         if (entry) readinessMap[entry[0]] = entry[1];
       }
       setExecutionReadiness(readinessMap);
+    }
+  }
+
+  async function handlePrepareAction(proposalId: string) {
+    setSpecMessage(null);
+    const createResult = await createDraftSpecificationAction(brandId, proposalId);
+    if (!createResult.success || !createResult.specification) {
+      setSpecMessage(createResult.error ?? "Could not prepare this action.");
+      return;
+    }
+    setSpecifications((prev) => ({ ...prev, [proposalId]: createResult.specification! }));
+
+    const [targetsResult, assetsResult] = await Promise.all([listAvailableTargetsAction(brandId), listAvailableCreativeAssetsAction(brandId)]);
+    if (targetsResult.success) setAvailableTargets(targetsResult.targetIds);
+    if (assetsResult.success) setAvailableAssets(assetsResult.assets);
+  }
+
+  async function handleUpdateSpecField(specificationId: string, field: "targetEntityId" | "creativeAssetId" | "proposedSpendCents", value: string | number | null) {
+    const updateResult = await updateDraftSpecificationAction(brandId, specificationId, { [field]: value });
+    if (updateResult.success && updateResult.specification) {
+      setSpecifications((prev) => ({ ...prev, [updateResult.specification!.proposalId]: updateResult.specification! }));
+    } else {
+      setSpecMessage(updateResult.error ?? "Could not update this field.");
+    }
+  }
+
+  async function handleFinalizeSpecification(specificationId: string, proposalId: string) {
+    const finalizeResult = await finalizeSpecificationAction(brandId, specificationId);
+    if (finalizeResult.specification) {
+      setSpecifications((prev) => ({ ...prev, [proposalId]: finalizeResult.specification! }));
+    }
+    if (finalizeResult.readiness && finalizeResult.readiness.status !== "READY") {
+      setSpecMessage(finalizeResult.readiness.reasons.map((r) => r.message).join(" "));
+    } else if (!finalizeResult.success) {
+      setSpecMessage(finalizeResult.error ?? "Could not finalize this specification.");
+    } else {
+      setSpecMessage(null);
     }
   }
 
@@ -329,6 +371,74 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
                             </>
                           )}
                           <p style={{ fontSize: "11px", color: "#64748b", margin: "6px 0 0" }}>No advertising changes have been made.</p>
+                        </div>
+                      )}
+                      {p.status === "APPROVED" && !specifications[p.id] && (
+                        <button
+                          onClick={() => handlePrepareAction(p.id)}
+                          style={{ marginTop: "10px", fontSize: "12px", fontWeight: 700, color: "#e2e8f0", background: "#1e293b", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit" }}
+                        >
+                          Prepare exact action
+                        </button>
+                      )}
+                      {p.status === "APPROVED" && specifications[p.id] && specifications[p.id].status === "DRAFT" && (
+                        <div style={{ marginTop: "10px", padding: "10px", background: "#0d1420", border: "1px solid #1e293b", borderRadius: "8px" }}>
+                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0", margin: "0 0 8px" }}>Prepare exact action</p>
+                          <label style={{ fontSize: "11px", color: "#64748b", display: "block", marginBottom: "4px" }}>Target</label>
+                          <select
+                            defaultValue=""
+                            onChange={(e) => handleUpdateSpecField(specifications[p.id].id, "targetEntityId", e.target.value || null)}
+                            style={{ width: "100%", marginBottom: "8px", fontSize: "12px", background: "#080b12", color: "#e2e8f0", border: "1px solid #1e293b", borderRadius: "6px", padding: "6px" }}
+                          >
+                            <option value="">Select a target...</option>
+                            {availableTargets.map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                          <label style={{ fontSize: "11px", color: "#64748b", display: "block", marginBottom: "4px" }}>Creative</label>
+                          <select
+                            defaultValue=""
+                            onChange={(e) => handleUpdateSpecField(specifications[p.id].id, "creativeAssetId", e.target.value || null)}
+                            style={{ width: "100%", marginBottom: "8px", fontSize: "12px", background: "#080b12", color: "#e2e8f0", border: "1px solid #1e293b", borderRadius: "6px", padding: "6px" }}
+                          >
+                            <option value="">Select a creative...</option>
+                            {availableAssets.map((a) => (
+                              <option key={a.id} value={a.id}>{a.originalFilename ?? a.category}</option>
+                            ))}
+                          </select>
+                          <label style={{ fontSize: "11px", color: "#64748b", display: "block", marginBottom: "4px" }}>Proposed test spend (in your account currency, as a whole-number amount)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            placeholder="e.g. 15"
+                            onBlur={(e) => handleUpdateSpecField(specifications[p.id].id, "proposedSpendCents", e.target.value ? Math.round(Number(e.target.value) * 100) : null)}
+                            style={{ width: "100%", marginBottom: "8px", fontSize: "12px", background: "#080b12", color: "#e2e8f0", border: "1px solid #1e293b", borderRadius: "6px", padding: "6px" }}
+                          />
+                          <button
+                            onClick={() => handleFinalizeSpecification(specifications[p.id].id, p.id)}
+                            style={{ fontSize: "12px", fontWeight: 700, color: "#080b12", background: "#4ade80", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit" }}
+                          >
+                            Ready for owner authorization
+                          </button>
+                          {specMessage && (
+                            <p style={{ fontSize: "11px", color: "#f87171", margin: "8px 0 0" }}>{specMessage}</p>
+                          )}
+                        </div>
+                      )}
+                      {p.status === "APPROVED" && specifications[p.id] && specifications[p.id].status === "READY_FOR_OWNER_AUTHORIZATION" && (
+                        <div style={{ marginTop: "10px", padding: "10px", background: "#0d1420", border: "1px solid #1e293b", borderRadius: "8px" }}>
+                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0", margin: "0 0 8px" }}>Proposed advertising action</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Action: Test an alternative creative</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Account: {specifications[p.id].metaAdAccountId}</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Target: {specifications[p.id].targetEntityId}</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Creative: {specifications[p.id].creativeAssetId}</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>
+                            Proposed test spend: {specifications[p.id].proposedSpendCents !== null ? (specifications[p.id].proposedSpendCents! / 100).toFixed(2) : "Not set"} {specifications[p.id].currency}
+                          </p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 8px" }}>Maximum allowed test budget: {p.maxAuthorizedSpendCents === null ? "Not set" : (p.maxAuthorizedSpendCents / 100).toFixed(2)}</p>
+                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#facc15", margin: "0 0 6px" }}>Status: Waiting for your authorization</p>
+                          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>No advertising changes have been made. This is informational only.</p>
                         </div>
                       )}
                     </div>
