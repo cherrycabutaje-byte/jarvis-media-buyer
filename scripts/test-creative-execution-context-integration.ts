@@ -49,11 +49,18 @@ console.log("\n=== IMMUTABILITY 1: Finalized (non-DRAFT) context's material fiel
   assert(updateBody.includes('.eq("status", "DRAFT")'), "updateDraftCreativeExecutionContext (the only function that can change material fields) is atomically gated to DRAFT rows only")
 }
 
-console.log("\n=== IMMUTABILITY 2: Authorization applies to the exact persisted snapshot (finalize reads from the trusted row, not client input) ===")
+console.log("\n=== IMMUTABILITY 2 (superseded by Meta Page & Instagram Identity Read/Verification V1): Authorization applies to the exact persisted snapshot, now via a genuine trusted lookup rather than the stored boolean ===")
 {
+  // The stored page_identity_verified column was correctly REPLACED
+  // by a fresh, genuine trusted-identity lookup (getTrustedPageIdentity)
+  // once that mechanism was built - reading the always-false stored
+  // column directly is no longer how this decision is made, and
+  // checking for it here would be asserting the OLD, superseded
+  // behavior rather than the new, safer one.
   const fnMatch = actionSource.match(/export async function finalizeCreativeExecutionContextAction[\s\S]*$/)
   const fnBody = fnMatch ? fnMatch[0] : ""
-  assert(fnBody.includes("contextResult.data.primary_text") && fnBody.includes("contextResult.data.page_identity_verified"), "readiness evaluation reads every field from the freshly-reloaded, trusted persisted row - never from a client-supplied payload")
+  assert(fnBody.includes("contextResult.data.primary_text"), "readiness evaluation still reads material content fields from the freshly-reloaded, trusted persisted row - never from a client-supplied payload")
+  assert(fnBody.includes("getTrustedPageIdentity(") && fnBody.includes("pageIdentityTrusted"), "Page-identity readiness is now genuinely derived from a fresh trusted lookup, not the stored boolean - a strictly safer replacement, not a regression")
 }console.log("\n=== IMMUTABILITY 3: Changed content requires a genuinely new authorization (one-way atomic transition, no reversal) ===")
 {
   const authFn = repoSource.match(/export async function authorizeCreativeExecutionContext[\s\S]*?\n}/)

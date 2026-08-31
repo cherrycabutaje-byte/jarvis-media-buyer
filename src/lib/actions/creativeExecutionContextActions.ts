@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server"
 import { getBrandById } from "@/lib/repositories/brandRepository"
 import { getWorkspacesForUser } from "@/lib/repositories/workspaceRepository"
 import { getActionSpecificationById } from "@/lib/repositories/actionSpecificationRepository"
+import { getMetaAdAccountLinkForBrand } from "@/lib/repositories/metaAdAccountRepository"
+import { getTrustedPageIdentity } from "@/lib/repositories/metaPageIdentityRepository"
 import {
   createDraftCreativeExecutionContext,
   getCreativeExecutionContextById,
@@ -193,6 +195,22 @@ export async function finalizeCreativeExecutionContextAction(
     return { success: false, error: "That ad content does not belong to this business.", context: null, readiness: null }
   }
 
+  // Section 12 (Meta Page & Instagram Identity Read/Verification V1):
+  // readiness NEVER accepts the stored page_identity_verified boolean
+  // as authoritative - it is replaced here by a genuine, fresh trusted
+  // lookup against meta_page_identities, scoped to this exact brand's
+  // own Meta account link. The stored column is retained only for
+  // migration/schema compatibility and is never read for this
+  // decision.
+  let pageIdentityTrusted = false
+  if (contextResult.data.page_id) {
+    const linkResult = await getMetaAdAccountLinkForBrand(brandId)
+    if (linkResult.data) {
+      const identityResult = await getTrustedPageIdentity(linkResult.data.id, contextResult.data.page_id)
+      pageIdentityTrusted = !identityResult.error && identityResult.data !== null
+    }
+  }
+
   const readiness = evaluateCreativeExecutionContextReadiness({
     specificationId: contextResult.data.specification_id,
     primaryText: contextResult.data.primary_text,
@@ -201,7 +219,7 @@ export async function finalizeCreativeExecutionContextAction(
     destinationUrl: contextResult.data.destination_url,
     callToActionType: contextResult.data.call_to_action_type,
     pageId: contextResult.data.page_id,
-    pageIdentityVerified: contextResult.data.page_identity_verified,
+    pageIdentityVerified: pageIdentityTrusted,
     instagramActorId: contextResult.data.instagram_actor_id,
   })
 
@@ -238,6 +256,18 @@ export async function decideCreativeExecutionContextAuthorizationAction(
   }
   if (contextResult.data.brand_id !== brandId) {
     return { success: false, error: "That ad content does not belong to this business.", context: null }
+  }
+
+  // Section 13: revalidate the trusted Page identity again before
+  // AUTHORIZE - never trusts whatever was true at finalize time.
+  // DECLINE never requires this revalidation, matching the
+  // established pattern that declining always remains possible.
+  if (decision === "AUTHORIZE" && contextResult.data.page_id) {
+    const linkResult = await getMetaAdAccountLinkForBrand(brandId)
+    const identityResult = linkResult.data ? await getTrustedPageIdentity(linkResult.data.id, contextResult.data.page_id) : { data: null, error: null }
+    if (!linkResult.data || identityResult.error || !identityResult.data) {
+      return { success: false, error: "The selected Facebook Page could not be re-verified and cannot be authorized.", context: null }
+    }
   }
 
   const transitionCheck = validateContextAuthorization(contextResult.data.status as CreativeExecutionContextStatus, decision)
