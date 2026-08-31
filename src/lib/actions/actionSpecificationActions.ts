@@ -25,6 +25,9 @@ import {
   type AuthorizationDecisionType,
 } from "@/lib/product/concreteActionSpecification"
 import { evaluateProposedMediaAction, type OwnerGuardrails } from "@/lib/product/ownerGuardrails"
+import { evaluateAuthorizedSpecificationExecutionEligibility } from "@/lib/product/concreteActionSpecification"
+import { buildMetaExecutionPlan, type ExecutionPlanResult, type CreativeAssetForPlanning } from "@/lib/product/metaExecutionPlan"
+import { getCreativeExecutionContextsForSpecification } from "@/lib/repositories/creativeExecutionContextRepository"
 
 /**
  * Concrete Action Specification V1 slice.
@@ -539,4 +542,124 @@ export async function decideSpecificationAuthorizationAction(
   }
 
   return { success: true, error: null, specification: toCustomerFacing(authorizeResult.data), blockers: [] }
+}
+
+/**
+ * Creative Execution Context V1 slice addition.
+ *
+ * Wires an AUTHORIZED specification + its own AUTHORIZED creative
+ * execution context into buildMetaExecutionPlan() - the first
+ * real caller of that pure function. The execution context's
+ * material fields are only ever passed through if the context
+ * itself is genuinely AUTHORIZED (never merely DRAFT or READY) -
+ * an unauthorized context is treated identically to a missing one,
+ * so its creative-metadata blockers still correctly apply.
+ *
+ * This does NOT weaken SPEND_MODEL_UNSUPPORTED - the specification's
+ * own targetEntityType is passed through unchanged, so an AD_SET
+ * target still triggers that finding exactly as before. Resolving
+ * the creative-metadata blockers and resolving the spend-model
+ * blocker are independent, and this function proves that
+ * independence rather than hiding it.
+ */
+export async function buildExecutionPlanAction(
+  brandId: string,
+  specificationId: string
+): Promise<{ success: boolean; error: string | null; result: ExecutionPlanResult | null }> {
+  const access = await verifyBrandAccess(brandId)
+  if ("error" in access) {
+    return { success: false, error: access.error, result: null }
+  }
+
+  const specResult = await getActionSpecificationById(specificationId)
+  if (specResult.error || !specResult.data) {
+    return { success: false, error: "That specification could not be found.", result: null }
+  }
+  if (specResult.data.brand_id !== brandId) {
+    return { success: false, error: "That specification does not belong to this business.", result: null }
+  }
+
+  const proposalResult = await getActionProposalById(specResult.data.proposal_id)
+  if (proposalResult.error || !proposalResult.data) {
+    return { success: false, error: "The proposal behind this specification could not be found.", result: null }
+  }
+
+  const brandResult = await getBrandById(brandId)
+  if (brandResult.error || !brandResult.data) {
+    return { success: false, error: brandResult.error ?? "Business not found.", result: null }
+  }
+  const currentGuardrails: OwnerGuardrails = {
+    authorityMode: (brandResult.data.authority_mode as OwnerGuardrails["authorityMode"]) ?? null,
+    currency: brandResult.data.budget_currency,
+    monthlyBudgetCents: brandResult.data.monthly_budget_cents,
+    dailyMaximumCents: brandResult.data.daily_maximum_cents,
+    maxTestBudgetCents: brandResult.data.max_test_budget_cents,
+  }
+  const linkResult = await getMetaAdAccountLinkForBrand(brandId)
+  const currentMetaAdAccountId = linkResult.data ? linkResult.data.meta_ad_account_id : null
+
+  const gateResult = evaluateAuthorizedSpecificationExecutionEligibility(
+    {
+      status: specResult.data.status as SpecificationStatus,
+      decidedAt: specResult.data.decided_at,
+      decidedBy: specResult.data.decided_by,
+      actionType: specResult.data.action_type as SpecificationActionType,
+      metaAdAccountId: specResult.data.meta_ad_account_id,
+      targetEntityType: specResult.data.target_entity_type,
+      targetEntityId: specResult.data.target_entity_id,
+      creativeAssetId: specResult.data.creative_asset_id,
+      proposedSpendCents: specResult.data.proposed_spend_cents,
+      currency: specResult.data.currency,
+    },
+    {
+      status: proposalResult.data.status as "PENDING_OWNER_REVIEW" | "APPROVED" | "DECLINED" | "EXPIRED",
+      solutionCandidateCode: proposalResult.data.solution_candidate_code,
+      category: proposalResult.data.category,
+      createdAt: proposalResult.data.created_at,
+      decidedAt: proposalResult.data.decided_at,
+      decidedBy: proposalResult.data.decided_by,
+      entityType: proposalResult.data.entity_type,
+      entityId: proposalResult.data.entity_id,
+      maxAuthorizedSpendCents: proposalResult.data.max_authorized_spend_cents,
+    },
+    currentGuardrails,
+    currentMetaAdAccountId
+  )
+
+  const contextsResult = await getCreativeExecutionContextsForSpecification(specificationId)
+  const authorizedContext = (contextsResult.data ?? []).find((c) => c.status === "AUTHORIZED") ?? null
+
+  const creativeForPlanning: CreativeAssetForPlanning | null = authorizedContext
+    ? {
+        id: specResult.data.creative_asset_id ?? "",
+        mimeType: "",
+        storagePath: "",
+        primaryText: authorizedContext.primary_text,
+        headline: authorizedContext.headline,
+        description: authorizedContext.description,
+        destinationUrl: authorizedContext.destination_url,
+        callToActionType: authorizedContext.call_to_action_type,
+        pageId: authorizedContext.page_id,
+        instagramActorId: authorizedContext.instagram_actor_id,
+      }
+    : null
+
+  const planResult = buildMetaExecutionPlan(
+    {
+      id: specResult.data.id,
+      status: specResult.data.status as SpecificationStatus,
+      decidedAt: specResult.data.decided_at,
+      decidedBy: specResult.data.decided_by,
+      actionType: specResult.data.action_type as SpecificationActionType,
+      metaAdAccountId: specResult.data.meta_ad_account_id,
+      targetEntityType: specResult.data.target_entity_type,
+      targetEntityId: specResult.data.target_entity_id,
+      proposedSpendCents: specResult.data.proposed_spend_cents,
+      currency: specResult.data.currency,
+    },
+    gateResult,
+    creativeForPlanning
+  )
+
+  return { success: true, error: null, result: planResult }
 }

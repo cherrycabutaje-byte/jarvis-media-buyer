@@ -3,6 +3,7 @@ import { useState } from "react";
 import { getPerformanceSummaryAction, type PerformanceSummaryResult } from "@/lib/actions/performanceSummaryActions";
 import { proposeActionForCandidateAction, listActionProposalsAction, decideActionProposalAction, evaluateExecutionReadinessAction, type CustomerFacingActionProposal } from "@/lib/actions/actionProposalActions";
 import { createDraftSpecificationAction, updateDraftSpecificationAction, finalizeSpecificationAction, listAvailableTargetsAction, listAvailableCreativeAssetsAction, decideSpecificationAuthorizationAction, type CustomerFacingSpecification } from "@/lib/actions/actionSpecificationActions";
+import { createDraftCreativeExecutionContextAction, updateDraftCreativeExecutionContextAction, finalizeCreativeExecutionContextAction, decideCreativeExecutionContextAuthorizationAction, type CustomerFacingCreativeExecutionContext } from "@/lib/actions/creativeExecutionContextActions";
 
 export interface PerformanceMonitorSectionProps {
   brandId: string;
@@ -29,6 +30,8 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
   const [availableAssets, setAvailableAssets] = useState<Array<{ id: string; category: string; originalFilename: string | null }>>([]);
   const [specMessage, setSpecMessage] = useState<string | null>(null);
   const [authBlockers, setAuthBlockers] = useState<string[]>([]);
+  const [adContexts, setAdContexts] = useState<Record<string, CustomerFacingCreativeExecutionContext>>({});
+  const [adContentMessage, setAdContentMessage] = useState<string | null>(null);
 
   function getPeriods() {
     const today = new Date();
@@ -128,6 +131,60 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
     } else {
       setSpecMessage(null);
       setAuthBlockers([]);
+    }
+  }
+
+  async function handlePrepareAdContent(brandIdParam: string, specificationId: string) {
+    setAdContentMessage(null);
+    const result = await createDraftCreativeExecutionContextAction(brandIdParam, specificationId);
+    if (!result.success || !result.context) {
+      setAdContentMessage(result.error ?? "Could not prepare ad content.");
+      return;
+    }
+    setAdContexts((prev) => ({ ...prev, [specificationId]: result.context! }));
+  }
+
+  async function handleUpdateAdContentField(contextId: string, specificationId: string, field: "primaryText" | "destinationUrl" | "callToActionType" | "pageId", value: string | null) {
+    const result = await updateDraftCreativeExecutionContextAction(brandId, contextId, { [field]: value });
+    if (result.success && result.context) {
+      setAdContexts((prev) => ({ ...prev, [specificationId]: result.context! }));
+    } else {
+      setAdContentMessage(result.error ?? "Could not update ad content.");
+    }
+  }
+
+  async function handleFinalizeAdContent(contextId: string, specificationId: string) {
+    const result = await finalizeCreativeExecutionContextAction(brandId, contextId);
+    if (result.context) {
+      setAdContexts((prev) => ({ ...prev, [specificationId]: result.context! }));
+    }
+    if (result.readiness && result.readiness.status !== "READY") {
+      setAdContentMessage(result.readiness.reasons.map((r) => r.message).join(" "));
+    } else if (!result.success) {
+      setAdContentMessage(result.error ?? "Could not finalize ad content.");
+    } else {
+      setAdContentMessage(null);
+    }
+  }
+
+  async function handleAdContentAuthorizeDecision(contextId: string, specificationId: string, decision: "AUTHORIZE" | "DECLINE") {
+    if (decision === "AUTHORIZE") {
+      const confirmed = window.confirm(
+        "You are authorizing this exact ad content as shown above.\n\nThis does not publish the ad or spend money.\n\nAuthorize this ad content?"
+      );
+      if (!confirmed) return;
+    } else {
+      const confirmed = window.confirm("Decline this ad content?");
+      if (!confirmed) return;
+    }
+    const result = await decideCreativeExecutionContextAuthorizationAction(brandId, contextId, decision);
+    if (result.context) {
+      setAdContexts((prev) => ({ ...prev, [specificationId]: result.context! }));
+    }
+    if (!result.success) {
+      setAdContentMessage(result.error ?? "Could not record your decision.");
+    } else {
+      setAdContentMessage(null);
     }
   }
 
@@ -486,6 +543,97 @@ export default function PerformanceMonitorSection({ brandId }: PerformanceMonito
                             </div>
                           )}
                           <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>No advertising changes will occur from this decision alone.</p>
+                        </div>
+                      )}
+                      {p.status === "APPROVED" && specifications[p.id] && specifications[p.id].status === "AUTHORIZED" && !adContexts[specifications[p.id].id] && (
+                        <button
+                          onClick={() => handlePrepareAdContent(brandId, specifications[p.id].id)}
+                          style={{ marginTop: "10px", fontSize: "12px", fontWeight: 700, color: "#e2e8f0", background: "#1e293b", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit" }}
+                        >
+                          Prepare ad content
+                        </button>
+                      )}
+                      {specifications[p.id] && adContexts[specifications[p.id].id] && adContexts[specifications[p.id].id].status === "DRAFT" && (
+                        <div style={{ marginTop: "10px", padding: "10px", background: "#0d1420", border: "1px solid #1e293b", borderRadius: "8px" }}>
+                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0", margin: "0 0 8px" }}>Prepare ad content</p>
+                          <label style={{ fontSize: "11px", color: "#64748b", display: "block", marginBottom: "4px" }}>Primary text</label>
+                          <textarea
+                            onBlur={(e) => handleUpdateAdContentField(adContexts[specifications[p.id].id].id, specifications[p.id].id, "primaryText", e.target.value || null)}
+                            style={{ width: "100%", marginBottom: "8px", fontSize: "12px", background: "#080b12", color: "#e2e8f0", border: "1px solid #1e293b", borderRadius: "6px", padding: "6px" }}
+                          />
+                          <label style={{ fontSize: "11px", color: "#64748b", display: "block", marginBottom: "4px" }}>Destination URL</label>
+                          <input
+                            type="text"
+                            placeholder="https://..."
+                            onBlur={(e) => handleUpdateAdContentField(adContexts[specifications[p.id].id].id, specifications[p.id].id, "destinationUrl", e.target.value || null)}
+                            style={{ width: "100%", marginBottom: "8px", fontSize: "12px", background: "#080b12", color: "#e2e8f0", border: "1px solid #1e293b", borderRadius: "6px", padding: "6px" }}
+                          />
+                          <label style={{ fontSize: "11px", color: "#64748b", display: "block", marginBottom: "4px" }}>Call to action</label>
+                          <select
+                            defaultValue=""
+                            onChange={(e) => handleUpdateAdContentField(adContexts[specifications[p.id].id].id, specifications[p.id].id, "callToActionType", e.target.value || null)}
+                            style={{ width: "100%", marginBottom: "8px", fontSize: "12px", background: "#080b12", color: "#e2e8f0", border: "1px solid #1e293b", borderRadius: "6px", padding: "6px" }}
+                          >
+                            <option value="">Select a call-to-action...</option>
+                            <option value="SHOP_NOW">Shop Now</option>
+                            <option value="LEARN_MORE">Learn More</option>
+                            <option value="SIGN_UP">Sign Up</option>
+                            <option value="GET_OFFER">Get Offer</option>
+                            <option value="CONTACT_US">Contact Us</option>
+                          </select>
+                          <label style={{ fontSize: "11px", color: "#64748b", display: "block", marginBottom: "4px" }}>Facebook Page ID</label>
+                          <input
+                            type="text"
+                            placeholder="Page ID"
+                            onBlur={(e) => handleUpdateAdContentField(adContexts[specifications[p.id].id].id, specifications[p.id].id, "pageId", e.target.value || null)}
+                            style={{ width: "100%", marginBottom: "8px", fontSize: "12px", background: "#080b12", color: "#e2e8f0", border: "1px solid #1e293b", borderRadius: "6px", padding: "6px" }}
+                          />
+                          <button
+                            onClick={() => handleFinalizeAdContent(adContexts[specifications[p.id].id].id, specifications[p.id].id)}
+                            style={{ fontSize: "12px", fontWeight: 700, color: "#080b12", background: "#4ade80", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit" }}
+                          >
+                            Review ad content
+                          </button>
+                          {adContentMessage && (
+                            <p style={{ fontSize: "11px", color: "#f87171", margin: "8px 0 0" }}>{adContentMessage}</p>
+                          )}
+                        </div>
+                      )}
+                      {specifications[p.id] && adContexts[specifications[p.id].id] && adContexts[specifications[p.id].id].status === "READY_FOR_OWNER_AUTHORIZATION" && (
+                        <div style={{ marginTop: "10px", padding: "10px", background: "#0d1420", border: "1px solid #1e293b", borderRadius: "8px" }}>
+                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0", margin: "0 0 8px" }}>Review ad content</p>
+                          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 8px" }}>This is the exact advertising content JARVIS would use if a future execution is separately permitted.</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Primary text: {adContexts[specifications[p.id].id].primaryText}</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Destination URL: {adContexts[specifications[p.id].id].destinationUrl}</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 3px" }}>Call to action: {adContexts[specifications[p.id].id].callToActionType}</p>
+                          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 8px" }}>Facebook Page: {adContexts[specifications[p.id].id].pageId}</p>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <button
+                              onClick={() => handleAdContentAuthorizeDecision(adContexts[specifications[p.id].id].id, specifications[p.id].id, "AUTHORIZE")}
+                              style={{ fontSize: "12px", fontWeight: 700, color: "#080b12", background: "#4ade80", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit" }}
+                            >
+                              Authorize this ad content
+                            </button>
+                            <button
+                              onClick={() => handleAdContentAuthorizeDecision(adContexts[specifications[p.id].id].id, specifications[p.id].id, "DECLINE")}
+                              style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0", background: "#1e293b", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit" }}
+                            >
+                              Decline
+                            </button>
+                          </div>
+                          <p style={{ fontSize: "11px", color: "#64748b", margin: "8px 0 0" }}>This does not publish the ad or spend money.</p>
+                        </div>
+                      )}
+                      {specifications[p.id] && adContexts[specifications[p.id].id] && adContexts[specifications[p.id].id].status === "AUTHORIZED" && (
+                        <div style={{ marginTop: "10px", padding: "10px", background: "#0d1420", border: "1px solid #1e293b", borderRadius: "8px" }}>
+                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#4ade80", margin: "0 0 6px" }}>Ad content authorized</p>
+                          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 8px" }}>No advertising changes have been made.</p>
+                        </div>
+                      )}
+                      {specifications[p.id] && adContexts[specifications[p.id].id] && adContexts[specifications[p.id].id].status === "DECLINED" && (
+                        <div style={{ marginTop: "10px", padding: "10px", background: "#0d1420", border: "1px solid #1e293b", borderRadius: "8px" }}>
+                          <p style={{ fontSize: "12px", fontWeight: 700, color: "#94a3b8", margin: "0 0 6px" }}>Ad content declined</p>
+                          <p style={{ fontSize: "11px", color: "#64748b", margin: 0 }}>No advertising changes have been made.</p>
                         </div>
                       )}
                       {p.status === "APPROVED" && specifications[p.id] && specifications[p.id].status === "AUTHORIZED" && (
