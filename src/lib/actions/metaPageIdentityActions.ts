@@ -11,6 +11,8 @@ import {
   type StoredMetaPageIdentity,
 } from "@/lib/repositories/metaPageIdentityRepository"
 import { normalizeMetaPageIdentities, type MetaPageIdentitySyncResult } from "@/lib/product/metaPageIdentity"
+import { getPermissionObservationsForLink } from "@/lib/repositories/metaPermissionObservationRepository"
+import { evaluateMetaIdentityPermissionCapability } from "@/lib/product/metaPermission"
 import type { MetaPageIdentityReadProvider } from "@/lib/product/providers/metaPageIdentityReadProvider"
 
 /**
@@ -92,6 +94,26 @@ export async function syncTrustedPageIdentitiesAction(
   const credentialResult = await getMetaAdAccountCredential(linkResult.data.id)
   if (credentialResult.error || !credentialResult.data) {
     return { success: false, error: "Could not access the Meta credential for this business.", identities: [] }
+  }
+
+  // Meta OAuth Permission Capability V1 integration: never attempt
+  // the Page sync merely because a Meta account is connected (ads
+  // access does not imply Page access) - require a genuinely
+  // observed, currently CAPABLE permission first. UNKNOWN (never
+  // yet inspected) and MISSING_PERMISSION both fail closed here,
+  // exactly like a confirmed absence - the caller should run
+  // inspectMetaPermissionsAction first.
+  const observationsResult = await getPermissionObservationsForLink(linkResult.data.id)
+  const observedPermissions = (observationsResult.data ?? [])
+    .filter((r) => r.status === "granted" || r.status === "declined")
+    .map((r) => ({ permission: r.permission, status: r.status as "granted" | "declined" }))
+  const capability = evaluateMetaIdentityPermissionCapability(observationsResult.data === null ? null : observedPermissions)
+  if (capability.pageIdentityRead !== "CAPABLE") {
+    return {
+      success: false,
+      error: "JARVIS does not currently have permission to read Facebook Pages for this Meta connection. Run a permission check first.",
+      identities: [],
+    }
   }
 
   const pagesResult = await provider.listAccessiblePages(credentialResult.data)
